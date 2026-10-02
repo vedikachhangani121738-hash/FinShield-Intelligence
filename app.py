@@ -62,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Main Title & Subtitle Header
-st.title("📉 Global Stock Market Crash-Risk Prediction & Intelligence Dashboard")
+st.title("Global Stock Market Crash-Risk Prediction & Intelligence Dashboard")
 st.markdown("**Institutional Research Platform | Model: Optimized Random Forest Classifier**")
 st.markdown("---")
 
@@ -129,8 +129,18 @@ else:
         try:
             search_results = yf.Search(search_query, max_results=8).quotes
             if search_results:
-                options = {f"{item.get('longname', item.s)} ({item.symbol})": item.symbol for item in search_results if 'symbol' in item}
-                
+                options = {}
+                for item in search_results:
+                    if isinstance(item, dict):
+                        sym = item.get('symbol')
+                        name = item.get('longname', sym)
+                    else:
+                        sym = getattr(item, 'symbol', None)
+                        name = getattr(item, 'longname', sym)
+                        
+                    if sym:
+                        options[f"{name} ({sym})"] = sym
+
                 if options:
                     chosen_label = st.sidebar.selectbox("Select Matching Company", list(options.keys()))
                     selected_ticker = options[chosen_label]
