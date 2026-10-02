@@ -6,7 +6,7 @@ import yfinance as yf
 
 # Page Configuration
 st.set_page_config(
-    page_title="FinShield | NIFTY50 Crash-Risk Intelligence",
+    page_title="FinShield | Global Crash-Risk Intelligence",
     page_icon="📉",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -54,7 +54,6 @@ st.markdown("""
         border-right: 1px solid #E2E8F0;
     }
 
-    /* Container Box Styling */
     .stAlert {
         border-radius: 6px;
         font-family: 'Times New Roman', Times, serif;
@@ -63,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Main Title & Subtitle Header
-st.title("📉 NIFTY50 Stock Crash-Risk Prediction & Intelligence Dashboard")
+st.title("📉 Global Stock Market Crash-Risk Prediction & Intelligence Dashboard")
 st.markdown("**Institutional Research Platform | Model: Optimized Random Forest Classifier**")
 st.markdown("---")
 
@@ -89,7 +88,7 @@ else:
 
 # Sidebar Configuration Panel
 st.sidebar.header("🎛️ Terminal Controls")
-data_source = st.sidebar.radio("Select Data Stream", ["Validation Benchmark File", "Live Market Feed (yfinance)"])
+data_source = st.sidebar.radio("Select Data Stream", ["Validation Benchmark File", "Live Global Market Feed (yfinance)"])
 
 row_data = pd.DataFrame()
 ticker_data = pd.DataFrame()
@@ -101,7 +100,7 @@ if data_source == "Validation Benchmark File":
     @st.cache_data
     def load_val_data():
         try:
-            return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
+            return pd.read_excel("NIFTY50_Val_Macro_Enhanced.xlsx")
         except Exception as e:
             st.error(f"❌ Excel Loading Error: {e}")
             return pd.DataFrame()
@@ -121,8 +120,11 @@ if data_source == "Validation Benchmark File":
         row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
 
 else:
-    ticker_input = st.sidebar.text_input("Yahoo Finance Ticker", "RELIANCE.NS")
-    selected_ticker = ticker_input.upper()
+    # Universal Free-Text Input for any stock in the global market
+    st.sidebar.markdown("### 🌐 Universal Asset Search")
+    ticker_input = st.sidebar.text_input("Enter Any Yahoo Ticker", "RELIANCE.NS")
+    st.sidebar.caption("Examples: `AAPL` (US), `RELIANCE.NS` (NSE India), `TSLA` (US), `TCS.NS` (NSE India)")
+    selected_ticker = ticker_input.strip().upper()
     
     @st.cache_data(ttl=3600)
     def fetch_live_data(symbol):
@@ -136,7 +138,7 @@ else:
         df['Close_pct'] = df['Close'].pct_change()
         df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
         
-        # RSI 14
+        # RSI 14 calculation
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -160,16 +162,19 @@ else:
         df['Month'] = df['Date'].dt.month
         return df.dropna()
 
-    ticker_data = fetch_live_data(selected_ticker)
-    if not ticker_data.empty:
-        date_col = 'Date'
-        available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
-        selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+    if selected_ticker:
+        ticker_data = fetch_live_data(selected_ticker)
+        if not ticker_data.empty:
+            date_col = 'Date'
+            available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
+            selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+        else:
+            st.sidebar.error(f"Could not retrieve data for '{selected_ticker}'. Check spelling or use a valid Yahoo Finance ticker suffix (e.g., .NS for NSE).")
 
 # Main Dashboard View
 if model is None or row_data.empty:
-    st.warning("⚠️ Please select a valid ticker and date. Ensure data streams and model artifacts are active.")
+    st.warning("⚠️ Please enter a valid stock ticker symbol in the sidebar and select a trading date to initialize analytics.")
 else:
     # Align features safely with model expectations
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
@@ -203,7 +208,7 @@ else:
             
             if 'Close' in row_data.columns:
                 close_val = row_data['Close'].values[0]
-                st.metric(label="Latest Settlement Price", value=f"₹{close_val:,.2f}" if isinstance(close_val, (int, float)) else str(close_val))
+                st.metric(label="Latest Settlement Price", value=f"{close_val:,.2f}" if isinstance(close_val, (int, float)) else str(close_val))
             
             display_cols = [c for c in ["Volatility_30D", "RSI_14", "SMA_50_200_Ratio", "Volume_Spike_Ratio", "Market_Volatility_Index"] if c in row_data.columns]
             if display_cols:
