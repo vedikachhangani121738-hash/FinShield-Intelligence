@@ -25,12 +25,16 @@ def load_model():
 val_df = load_data()
 model = load_model()
 
-feature_cols = [
-    "Volatility_30D", "Market_Volatility_Index", "RSI_14", "SMA_50", "SMA_200", 
-    "VWAP_20D", "Beta_60D", "Vol_x_Beta", 
-    "Lagged_Return_5D", "Lagged_Return_10D", "Lagged_Return_20D", 
-    "Lagged_Volume_5D", "Volume_Spike_Ratio", "SMA_50_200_Ratio", "Month"
-]
+# Automatically fetch the exact features the model was trained on
+if model is not None and hasattr(model, "feature_names_in_"):
+    feature_cols = list(model.feature_names_in_)
+else:
+    # Safe fallback if feature_names_in_ isn't present
+    feature_cols = [
+        "Volatility_30D", "Market_Volatility_Index", "RSI_14", "SMA_50", "SMA_200", 
+        "VWAP_20D", "Beta_60D", "Vol_x_Beta", 
+        "Lagged_Return_5D", "Lagged_Volume_5D", "Volume_Spike_Ratio", "Month"
+    ]
 
 if val_df.empty or model is None:
     st.error("⚠️ Model or validation data file missing. Please make sure Steps 1 and 2 ran successfully!")
