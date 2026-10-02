@@ -88,7 +88,7 @@ else:
 
 # Sidebar Configuration Panel
 st.sidebar.header("🎛️ Terminal Controls")
-data_source = st.sidebar.radio("Select Data Stream", ["Validation Benchmark File", "Live Global Market Feed (yfinance)"])
+data_source = st.sidebar.radio("Select Data Stream", ["Validation Benchmark File", "Live Company Search (yfinance)"])
 
 row_data = pd.DataFrame()
 ticker_data = pd.DataFrame()
@@ -117,64 +117,77 @@ if data_source == "Validation Benchmark File":
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Select Valuation Date", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
 else:
-    # Universal Free-Text Input for any stock in the global market
-    st.sidebar.markdown("### 🌐 Universal Asset Search")
-    ticker_input = st.sidebar.text_input("Enter Any Yahoo Ticker", "RELIANCE.NS")
-    st.sidebar.caption("Examples: `AAPL` (US), `RELIANCE.NS` (NSE India), `TSLA` (US), `TCS.NS` (NSE India)")
-    selected_ticker = ticker_input.strip().upper()
+    st.sidebar.markdown("### 🔍 Live Company Search")
+    search_query = st.sidebar.text_input("Type Company Name or Keyword", "Reliance")
+    st.sidebar.caption("Examples: `Apple`, `Reliance`, `Tata`, `Microsoft`")
     
-    @st.cache_data(ttl=3600)
-    def fetch_live_data(symbol):
-        df = yf.download(symbol, period="1y", interval="1d", progress=False)
-        if df.empty:
-            return pd.DataFrame()
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-            
-        # Feature Engineering pipeline for live data stream
-        df['Close_pct'] = df['Close'].pct_change()
-        df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
-        
-        # RSI 14 calculation
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rs = gain / loss
-        df['RSI_14'] = 100 - (100 / (1 + rs))
-        
-        df['SMA_50'] = df['Close'].rolling(50).mean()
-        df['SMA_200'] = df['Close'].rolling(200).mean()
-        df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / df['Volume'].rolling(20).mean()
-        df['Beta_60D'] = 1.0  
-        df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
-        df['Lagged_Return_5D'] = df['Close'].pct_change(5)
-        df['Lagged_Return_10D'] = df['Close'].pct_change(10) if 'Lagged_Return_10D' in feature_cols else 0
-        df['Lagged_Return_20D'] = df['Close'].pct_change(20) if 'Lagged_Return_20D' in feature_cols else 0
-        df['Lagged_Volume_5D'] = df['Volume'].shift(5)
-        df['Volume_Spike_Ratio'] = df['Volume'] / df['Volume'].rolling(20).mean()
-        df['SMA_50_200_Ratio'] = df['SMA_50'] / df['SMA_200']
-        df['Market_Volatility_Index'] = 15.0  
-        
-        df['Date'] = df.index
-        df['Month'] = df['Date'].dt.month
-        return df.dropna()
+    selected_ticker = ""
+    if search_query:
+        try:
+            # Query Yahoo Finance search API dynamically
+            search_results = yf.Search(search_query, max_results=8).quotes
+            if search_results:
+                # Format options to show both Company Name and Ticker symbol
+                options = {f"{item.get('longname', item.s)} ({item.symbol})": item.symbol for item in search_results if 'symbol' in item}
+                
+                if options:
+                    chosen_label = st.sidebar.selectbox("Select Matching Company", list(options.keys()))
+                    selected_ticker = options[chosen_label]
+            else:
+                st.sidebar.warning("No matching companies found. Try a different keyword.")
+        except Exception as e:
+            st.sidebar.error(f"Search API Error: {e}")
 
     if selected_ticker:
+        @st.cache_data(ttl=3600)
+        def fetch_live_data(symbol):
+            df = yf.download(symbol, period="1y", interval="1d", progress=False)
+            if df.empty:
+                return pd.DataFrame()
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+                
+            # Feature engineering pipeline for live data stream
+            df['Close_pct'] = df['Close'].pct_change()
+            df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
+            
+            # RSI 14 calculation
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+            rs = gain / loss
+            df['RSI_14'] = 100 - (100 / (1 + rs))
+            
+            df['SMA_50'] = df['Close'].rolling(50).mean()
+            df['SMA_200'] = df['Close'].rolling(200).mean()
+            df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / df['Volume'].rolling(20).mean()
+            df['Beta_60D'] = 1.0  
+            df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
+            df['Lagged_Return_5D'] = df['Close'].pct_change(5)
+            df['Lagged_Return_10D'] = df['Close'].pct_change(10) if 'Lagged_Return_10D' in feature_cols else 0
+            df['Lagged_Return_20D'] = df['Close'].pct_change(20) if 'Lagged_Return_20D' in feature_cols else 0
+            df['Lagged_Volume_5D'] = df['Volume'].shift(5)
+            df['Volume_Spike_Ratio'] = df['Volume'] / df['Volume'].rolling(20).mean()
+            df['SMA_50_200_Ratio'] = df['SMA_50'] / df['SMA_200']
+            df['Market_Volatility_Index'] = 15.0  
+            
+            df['Date'] = df.index
+            df['Month'] = df['Date'].dt.month
+            return df.dropna()
+
         ticker_data = fetch_live_data(selected_ticker)
         if not ticker_data.empty:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-        else:
-            st.sidebar.error(f"Could not retrieve data for '{selected_ticker}'. Check spelling or use a valid Yahoo Finance ticker suffix (e.g., .NS for NSE).")
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
 # Main Dashboard View
 if model is None or row_data.empty:
-    st.warning("⚠️ Please enter a valid stock ticker symbol in the sidebar and select a trading date to initialize analytics.")
+    st.warning("⚠️ Please select a company from the live search dropdown or validation file in the sidebar to initialize analytics.")
 else:
     # Align features safely with model expectations
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
