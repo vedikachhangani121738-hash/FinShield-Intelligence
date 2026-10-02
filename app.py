@@ -11,7 +11,7 @@ st.markdown("**Academic Project Defense Demonstration | Model: Optimized Random 
 @st.cache_data
 def load_data():
     try:
-        return pd.read_excel("NIFTY50_Val_Macro_Enhanced.xlsx")
+        return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
     except Exception:
         return pd.DataFrame()
 
