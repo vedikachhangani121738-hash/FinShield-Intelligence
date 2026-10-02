@@ -101,7 +101,7 @@ if data_source == "Validation Benchmark File":
     @st.cache_data
     def load_val_data():
         try:
-            return pd.read_excel("NIFTY50_Val_Macro_Enhanced.xlsx")
+            return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
         except Exception as e:
             st.error(f"❌ Excel Loading Error: {e}")
             return pd.DataFrame()
