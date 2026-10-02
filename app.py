@@ -4,6 +4,35 @@ import numpy as np
 import joblib
 
 st.set_page_config(page_title="NIFTY50 Crash Risk Intelligence Dashboard", layout="wide")
+st.markdown("""
+    <style>
+    /* Apply Times New Roman across the entire application */
+    html, body, [class*="css"] {
+        font-family: 'Times New Roman', Times, serif;
+    }
+    
+    /* Enhance headers and titles */
+    h1, h2, h3 {
+        font-family: 'Times New Roman', Times, serif;
+        font-weight: bold;
+        color: #2C3E50;
+    }
+
+    /* Style metric containers like professional cards */
+    [data-testid="stMetric"] {
+        background-color: #F8F9FA;
+        border: 1px solid #E9ECEF;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    
+    /* Style dataframes for readability */
+    dataframe {
+        font-family: 'Times New Roman', Times, serif;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 st.title("📉 NIFTY50 Stock Crash-Risk Prediction & Intelligence Dashboard")
 st.markdown("**Academic Project Defense Demonstration | Model: Optimized Random Forest Classifier**")
