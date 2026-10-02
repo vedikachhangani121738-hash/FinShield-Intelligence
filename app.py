@@ -118,6 +118,7 @@ if data_source == "Validation Benchmark File":
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Select Valuation Date", available_dates)
         row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+
 else:
     st.sidebar.markdown("### 🔍 Live Company Search")
     search_query = st.sidebar.text_input("Type Company Name or Keyword", "Reliance")
@@ -126,10 +127,8 @@ else:
     selected_ticker = ""
     if search_query:
         try:
-            # Query Yahoo Finance search API dynamically
             search_results = yf.Search(search_query, max_results=8).quotes
             if search_results:
-                # Format options to show both Company Name and Ticker symbol
                 options = {f"{item.get('longname', item.s)} ({item.symbol})": item.symbol for item in search_results if 'symbol' in item}
                 
                 if options:
@@ -149,11 +148,9 @@ else:
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
                 
-            # Feature engineering pipeline for live data stream
             df['Close_pct'] = df['Close'].pct_change()
             df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
             
-            # RSI 14 calculation
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -182,19 +179,17 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
-           row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+
 # Main Dashboard View
 if model is None or row_data.empty:
     st.warning("⚠️ Please select a company from the live search dropdown or validation file in the sidebar to initialize analytics.")
 else:
-    # Align features safely with model expectations
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
     
-    # Run Prediction
     prob = model.predict_proba(X_input.values)[:, 1][0]
     prediction = 1 if prob >= 0.30 else 0
     
-    # Professional Tab Structure
     tab1, tab2, tab3 = st.tabs(["🛡️ Risk Assessment Scorecard", "📊 Technical Telemetry", "🧠 Model Explainability"])
     
     with tab1:
