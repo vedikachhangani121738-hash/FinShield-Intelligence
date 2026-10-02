@@ -63,7 +63,7 @@ else:
                 X_input[col] = 0
         X_input = X_input[feature_cols]
 
-        prob = model.predict_proba(X_input)[:, 1][0]
+        prob = model.predict_proba(X_input.values)[:, 1][0]
         prediction = 1 if prob >= 0.30 else 0
         
         col1, col2 = st.columns([1, 2])
