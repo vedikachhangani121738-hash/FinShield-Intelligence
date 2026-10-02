@@ -182,8 +182,7 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
-
+           row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
 # Main Dashboard View
 if model is None or row_data.empty:
     st.warning("⚠️ Please select a company from the live search dropdown or validation file in the sidebar to initialize analytics.")
