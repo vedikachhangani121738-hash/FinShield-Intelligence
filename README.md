@@ -2,7 +2,7 @@
 Institutional-grade financial risk intelligence platform featuring NIFTY50 stock crash prediction models and mutual fund risk ratings.
 # 🛡️ Financial Risk Intelligence & Market Shield Platform
 
-An integrated academic analytics web application designed for comprehensive portfolio risk assessment, featuring real-time **NIFTY50 stock crash prediction** and **mutual fund risk ratings**.
+An integrated academic analytics web application designed for comprehensive portfolio risk assessment,featuring real-time **NIFTY50 stock crash prediction** and **mutual fund risk ratings**.
 
 ## 🚀 Key Features
 * **📉 NIFTY50 Crash-Risk Forecasting**: Powered by an optimized Machine Learning classification model (Random Forest) trained on technical, historical, and macro-enhanced indicators to predict structural market stress.
