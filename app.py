@@ -13,104 +13,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-st.markdown(
-    """
-    <style>
-    /* Professional Terminal Focus: Highlight the 1st column (Crash Probability) */
-    [data-testid="column"]:nth-child(4) {
-        background: linear-gradient(145deg, #1e293b 0%, #292016 100%) !important;
-        border: 2px solid #F59E0B !important;
-        border-radius: 10px !important;
-        box-shadow: 0 6px 24px rgba(245, 158, 11, 0.3) !important;
-        transform: scale(1.01);
-        transition: all 0.3s ease;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-# Change your column order from (Price, Vol, RSI, Crash) to (Crash, Price, Vol, RSI)
-col1, col2, col3, col4 = st.columns(4)
-
-    # 1. Your model calculates the crash probability for the searched stock here:
-# (Replace 'your_actual_model_probability_variable' with whatever variable name 
-# your Random Forest model uses in your code)
-crash_prob = round(your_actual_model_probability_variable, 1) 
-
-threshold = 30.0   # Your warning threshold
-
-# 2. Dynamic risk evaluation
-is_high_risk = crash_prob >= threshold
-
-if is_high_risk:
-    bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
-    border_color = "#EF4444"
-    shadow_color = "rgba(239, 68, 68, 0.4)"
-    status_text = f"▲ High Risk (Above {threshold}% Threshold)"
-    status_color = "#FCA5A5"
-else:
-    bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
-    border_color = "#10B981"
-    shadow_color = "rgba(16, 185, 129, 0.4)"
-    status_text = f"▼ Safe (Below {threshold}% Threshold)"
-    status_color = "#6EE7B7"
-
-# 3. Render the columns right here
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.markdown(
-        f"""
-        <div style="
-            background: {bg_gradient};
-            border: 2px solid {border_color};
-            border-radius: 10px;
-            padding: 14px 16px;
-            box-shadow: 0 6px 20px {shadow_color};
-        ">
-            <div style="color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">CRASH PROBABILITY</div>
-            <div style="color: #FFFFFF; font-size: 26px; font-weight: 700; margin: 4px 0 2px 0;">{crash_prob}%</div>
-            <div style="color: {status_color}; font-size: 11px; font-weight: 500;">{status_text}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with col2:
-    st.metric(label="SETTLEMENT PRICE", value="$1,167.70")
-
-with col3:
-    st.metric(label="ANNUALIZED VOLATILITY (30D)", value="18.6%")
-
-with col4:
-    st.metric(label="RSI (14-DAY)", value="26.1")
-    st.markdown(
-    """
-    <style>
-    /* Highlight the 1st metric card (Crash Probability) as the primary terminal conclusion */
-    [data-testid="column"]:nth-child(1) {
-        background: linear-gradient(145deg, #1e293b 0%, #3a2318 100%) !important;
-        border: 2px solid #F59E0B !important;
-        border-radius: 10px !important;
-        box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35) !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-st.markdown(
-    """
-    <style>
-    /* Change sidebar text and labels to white for high contrast */
-    [data-testid="stSidebar"] span, 
-    [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p {
-        color: #FFFFFF !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
 st.markdown("""
@@ -204,10 +106,15 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* Sidebar Styling */
+    /* Sidebar Styling & Text Contrast */
     [data-testid="stSidebar"] {
         background-color: #0F172A;
         border-right: 1px solid #1E293B;
+    }
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] p {
+        color: #FFFFFF !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -376,25 +283,64 @@ else:
     with tab1:
         st.markdown(f"### Asset Overview: **{selected_ticker}** | Valuation Timestamp: **{selected_date}**")
         
+        # Dynamic Crash Probability Styling Logic (Synced with Model Output 'prob')
+        crash_prob_pct = round(prob * 100, 1)
+        threshold = 30.0
+        is_high_risk = crash_prob_pct >= threshold
+
+        if is_high_risk:
+            bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
+            border_color = "#EF4444"  # Vibrant Red
+            shadow_color = "rgba(239, 68, 68, 0.4)"
+            status_text = f"▲ High Risk (Above {threshold}% Threshold)"
+            status_color = "#FCA5A5"
+        else:
+            bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
+            border_color = "#10B981"  # Vibrant Green
+            shadow_color = "rgba(16, 185, 129, 0.4)"
+            status_text = f"▼ Safe (Below {threshold}% Threshold)"
+            status_color = "#6EE7B7"
+
+        # Reordered columns: Crash Probability is now FIRST (col1)
         c1, c2, c3, c4 = st.columns(4)
         
-        # Spot Settlement Price
-        if 'Close' in row_data.columns:
-            close_p = row_data['Close'].values[0]
-            c1.metric("Settlement Price", f"${close_p:,.2f}" if isinstance(close_p, (int, float)) else str(close_p))
+        # 1. Crash Risk Probability (Highlighted First with Red/Green Status)
+        with c1:
+            st.markdown(
+                f"""
+                <div style="
+                    background: {bg_gradient};
+                    border: 2px solid {border_color};
+                    border-radius: 10px;
+                    padding: 14px 16px;
+                    box-shadow: 0 6px 20px {shadow_color};
+                ">
+                    <div style="color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">CRASH PROBABILITY</div>
+                    <div style="color: #FFFFFF; font-size: 24px; font-weight: 700; margin: 4px 0 2px 0;">{crash_prob_pct}%</div>
+                    <div style="color: {status_color}; font-size: 11px; font-weight: 500;">{status_text}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         
-        # 30D Volatility
-        if 'Volatility_30D' in row_data.columns:
-            vol_val = row_data['Volatility_30D'].values[0]
-            c2.metric("Annualized Volatility (30D)", f"{vol_val:.1%}")
+        # 2. Spot Settlement Price
+        with c2:
+            if 'Close' in row_data.columns:
+                close_p = row_data['Close'].values[0]
+                price_str = f"${close_p:,.2f}" if isinstance(close_p, (int, float)) else str(close_p)
+                st.metric(label="SETTLEMENT PRICE", value=price_str)
+        
+        # 3. 30D Volatility
+        with c3:
+            if 'Volatility_30D' in row_data.columns:
+                vol_val = row_data['Volatility_30D'].values[0]
+                st.metric(label="ANNUALIZED VOLATILITY (30D)", value=f"{vol_val:.1%}")
             
-        # RSI 14
-        if 'RSI_14' in row_data.columns:
-            rsi_val = row_data['RSI_14'].values[0]
-            c3.metric("RSI (14-Day)", f"{rsi_val:.1f}")
-            
-        # Crash Risk Probability
-        c4.metric("Crash Probability", f"{prob:.1%}", delta="30% Threshold", delta_color="inverse" if is_anomaly else "normal")
+        # 4. RSI 14
+        with c4:
+            if 'RSI_14' in row_data.columns:
+                rsi_val = row_data['RSI_14'].values[0]
+                st.metric(label="RSI (14-DAY)", value=f"{rsi_val:.1f}")
         
         st.markdown("---")
         
@@ -408,7 +354,7 @@ else:
                 st.progress(min(int(prob * 100), 100))
                 st.error("**Directive**: Model signals heightened probability of severe downside drawdown (>10% drop within 5-10 trading sessions). Preemptive risk reduction recommended.")
             elif prob >= 0.15:
-                st.markdown('<div class="risk-badge-elevated">⚠️️ ELEVATED WATCHLIST STATUS</div>', unsafe_allow_html=True)
+                st.markdown('<div class="risk-badge-elevated">⚠ ELEVATED WATCHLIST STATUS</div>', unsafe_allow_html=True)
                 st.progress(min(int(prob * 100), 100))
                 st.warning("**Directive**: Asset displays moderate volatility buildup. Monitor support levels and liquidity metrics closely.")
             else:
@@ -426,7 +372,6 @@ else:
             st.subheader("Key Primary Risk Drivers")
             st.markdown("Automated scan of evaluated features driving current probability classification:")
             
-            # Risk Drivers Analysis
             drivers = []
             if 'Volatility_30D' in row_data.columns and row_data['Volatility_30D'].values[0] > 0.25:
                 drivers.append(("Annualized Volatility (30D)", f"{row_data['Volatility_30D'].values[0]:.1%}", "HIGH", "High price dispersion increases crash likelihood."))
@@ -494,7 +439,6 @@ else:
         if not ticker_data.empty and 'Close' in ticker_data.columns and date_col:
             chart_df = ticker_data.set_index(date_col)
             
-            # Sub-tabs for technical charting views
             c_tab1, c_tab2 = st.tabs(["Price Action & Moving Averages", "Volume Spike & Volatility Profile"])
             
             with c_tab1:
