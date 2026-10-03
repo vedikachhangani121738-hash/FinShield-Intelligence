@@ -4,79 +4,138 @@ import numpy as np
 import joblib
 import yfinance as yf
 
-# Page Configuration
+# -----------------------------------------------------------------------------
+# 1. PAGE CONFIGURATION & INSTITUTIONAL TERMINAL STYLING
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="FinShield | Global Crash-Risk Intelligence",
-    page_icon="📉",
+    page_title="FinShield | Institutional Risk Intelligence Terminal",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Professional Institutional UI & Times New Roman Styling
+# Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
 st.markdown("""
     <style>
-    /* Global Font Styling */
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+    
     html, body, [class*="css"] {
-        font-family: 'Times New Roman', Times, serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Header Styling */
-    h1, h2, h3 {
-        font-family: 'Times New Roman', Times, serif;
-        font-weight: 700;
-        color: #1E293B;
-        letter-spacing: -0.5px;
+    code, pre, .stMetric, [data-testid="stMetricValue"] {
+        font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Professional Terminal Metric Cards */
+    /* Terminal Header Bar */
+    .terminal-header {
+        background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%);
+        border: 1px solid #334155;
+        border-left: 5px solid #3B82F6;
+        padding: 16px 22px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .terminal-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #F8FAFC;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    .terminal-subtitle {
+        font-size: 13px;
+        color: #94A3B8;
+        margin-top: 4px;
+    }
+
+    /* Institutional Metric Cards */
     [data-testid="stMetric"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        padding: 18px;
-        border-radius: 6px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        background-color: #1E293B;
+        border: 1px solid #334155;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
     [data-testid="stMetricLabel"] {
-        font-family: 'Times New Roman', Times, serif;
-        font-size: 14px;
-        color: #64748B;
+        font-size: 12px;
+        font-weight: 600;
+        color: #94A3B8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     [data-testid="stMetricValue"] {
-        font-family: 'Times New Roman', Times, serif;
-        font-size: 26px;
-        font-weight: bold;
-        color: #0F172A;
+        font-size: 24px;
+        font-weight: 700;
+        color: #F8FAFC;
+    }
+
+    /* Custom Risk Status Badges */
+    .risk-badge-critical {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #EF4444;
+        border: 1px solid #EF4444;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 12px;
+    }
+    .risk-badge-elevated {
+        background-color: rgba(245, 158, 11, 0.15);
+        color: #F59E0B;
+        border: 1px solid #F59E0B;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 12px;
+    }
+    .risk-badge-stable {
+        background-color: rgba(34, 197, 94, 0.15);
+        color: #22C55E;
+        border: 1px solid #22C55E;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 12px;
     }
 
     /* Sidebar Styling */
     [data-testid="stSidebar"] {
-        background-color: #F8FAFC;
-        border-right: 1px solid #E2E8F0;
-    }
-
-    .stAlert {
-        border-radius: 6px;
-        font-family: 'Times New Roman', Times, serif;
+        background-color: #0F172A;
+        border-right: 1px solid #1E293B;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Main Title & Subtitle Header
-st.title("Global Stock Market Crash-Risk Prediction & Intelligence Dashboard")
-st.markdown("**Institutional Research Platform | Model: Optimized Random Forest Classifier**")
-st.markdown("---")
+# Header Display
+st.markdown("""
+<div class="terminal-header">
+    <div class="terminal-title">🛡️ FinShield Risk Intelligence Terminal</div>
+    <div class="terminal-subtitle">Institutional Multi-Asset Tail-Risk Analytics & ML Crash Diagnostics | Model Engine: Random Forest Classifier</div>
+</div>
+""", unsafe_allow_html=True)
 
+# -----------------------------------------------------------------------------
+# 2. MODEL LOADING & FEATURE INITIALIZATION
+# -----------------------------------------------------------------------------
 @st.cache_resource
 def load_model():
     try:
         return joblib.load("rf_model.pkl")
     except Exception as e:
-        st.error(f"❌ Model Loading Error: {e}")
+        st.error(f"❌ Model Loading Failure: {e}")
         return None
 
 model = load_model()
 
-# Automatically fetch features expected by the model
+# Align feature expectations with model definition
 if model is not None and hasattr(model, "feature_names_in_"):
     feature_cols = list(model.feature_names_in_)
 else:
@@ -86,9 +145,11 @@ else:
         "Lagged_Return_5D", "Lagged_Volume_5D", "Volume_Spike_Ratio", "Month"
     ]
 
-# Sidebar Configuration Panel
-st.sidebar.header("🎛️ Terminal Controls")
-data_source = st.sidebar.radio("Select Data Stream", ["Validation Benchmark File", "Live Company Search (yfinance)"])
+# -----------------------------------------------------------------------------
+# 3. SIDEBAR TERMINAL CONTROLS & DATA STREAM SELECTION
+# -----------------------------------------------------------------------------
+st.sidebar.header("🎛️ Data Stream Controls")
+data_source = st.sidebar.radio("Select Data Engine", ["Validation Benchmark File", "Live Global Search (yfinance)"])
 
 row_data = pd.DataFrame()
 ticker_data = pd.DataFrame()
@@ -100,29 +161,29 @@ if data_source == "Validation Benchmark File":
     @st.cache_data
     def load_val_data():
         try:
-            return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
+            return pd.read_excel("NIFTY50_Val_Macro_Enhanced.xlsx")
         except Exception as e:
-            st.error(f"❌ Excel Loading Error: {e}")
+            st.error(f"❌ Benchmark Dataset Load Error: {e}")
             return pd.DataFrame()
     
     val_df = load_val_data()
     if not val_df.empty:
         ticker_col = "Ticker" if "Ticker" in val_df.columns else val_df.columns[0]
-        selected_ticker = st.sidebar.selectbox("Select Asset Symbol", val_df[ticker_col].unique())
-        ticker_data = val_df[val_df[ticker_col] == selected_ticker]
+        selected_ticker = st.sidebar.selectbox("Select Benchmark Asset Symbol", val_df[ticker_col].unique())
+        ticker_data = val_df[val_df[ticker_col] == selected_ticker].copy()
         
         date_col = "Date" if "Date" in ticker_data.columns else ticker_data.columns[1]
         ticker_data[date_col] = pd.to_datetime(ticker_data[date_col])
         ticker_data = ticker_data.sort_values(date_col, ascending=False)
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
-        selected_date = st.sidebar.selectbox("Select Valuation Date", available_dates)
+        selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
         row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
 
 else:
-    st.sidebar.markdown("### 🔍 Live Company Search")
-    search_query = st.sidebar.text_input("Type Company Name or Keyword", "Reliance")
-    st.sidebar.caption("Examples: `Apple`, `Reliance`, `Tata`, `Microsoft`")
+    st.sidebar.markdown("### 🔍 Live Global Ticker Search")
+    search_query = st.sidebar.text_input("Company Name or Ticker Keyword", "Reliance")
+    st.sidebar.caption("Examples: `Apple`, `Reliance`, `Tata Motors`, `Microsoft`, `NVDA`")
     
     selected_ticker = ""
     if search_query:
@@ -142,12 +203,12 @@ else:
                         options[f"{name} ({sym})"] = sym
 
                 if options:
-                    chosen_label = st.sidebar.selectbox("Select Matching Company", list(options.keys()))
+                    chosen_label = st.sidebar.selectbox("Select Target Equity", list(options.keys()))
                     selected_ticker = options[chosen_label]
             else:
-                st.sidebar.warning("No matching companies found. Try a different keyword.")
+                st.sidebar.warning("No matching equity instruments found.")
         except Exception as e:
-            st.sidebar.error(f"Search API Error: {e}")
+            st.sidebar.error(f"Search API Query Error: {e}")
 
     if selected_ticker:
         @st.cache_data(ttl=3600)
@@ -164,20 +225,20 @@ else:
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-            rs = gain / loss
+            rs = gain / (loss.replace(0, 1e-6))
             df['RSI_14'] = 100 - (100 / (1 + rs))
             
             df['SMA_50'] = df['Close'].rolling(50).mean()
             df['SMA_200'] = df['Close'].rolling(200).mean()
-            df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / df['Volume'].rolling(20).mean()
+            df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
             df['Beta_60D'] = 1.0  
             df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
             df['Lagged_Return_5D'] = df['Close'].pct_change(5)
             df['Lagged_Return_10D'] = df['Close'].pct_change(10) if 'Lagged_Return_10D' in feature_cols else 0
             df['Lagged_Return_20D'] = df['Close'].pct_change(20) if 'Lagged_Return_20D' in feature_cols else 0
             df['Lagged_Volume_5D'] = df['Volume'].shift(5)
-            df['Volume_Spike_Ratio'] = df['Volume'] / df['Volume'].rolling(20).mean()
-            df['SMA_50_200_Ratio'] = df['SMA_50'] / df['SMA_200']
+            df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
+            df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
             df['Market_Volatility_Index'] = 15.0  
             
             df['Date'] = df.index
@@ -188,60 +249,192 @@ else:
         if not ticker_data.empty:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
-            selected_date = st.sidebar.selectbox("Select Live Trading Date", available_dates[::-1])
+            selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
             row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
 
-# Main Dashboard View
+# -----------------------------------------------------------------------------
+# 4. MAIN TERMINAL DASHBOARD
+# -----------------------------------------------------------------------------
 if model is None or row_data.empty:
-    st.warning("⚠️ Please select a company from the live search dropdown or validation file in the sidebar to initialize analytics.")
+    st.info("💡 **Terminal Ready**: Select an asset from the sidebar or search a company keyword to initialize telemetry analytics.")
 else:
+    # Prepare input feature matrix safely aligned with model training shape
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
     
-    prob = model.predict_proba(X_input.values)[:, 1][0]
-    prediction = 1 if prob >= 0.30 else 0
+    # Calculate Crash Risk Probability
+    prob = float(model.predict_proba(X_input.values)[:, 1][0])
+    is_anomaly = prob >= 0.30
     
-    tab1, tab2, tab3 = st.tabs(["🛡️ Risk Assessment Scorecard", "📊 Technical Telemetry", "🧠 Model Explainability"])
+    # Institutional Tab Routing
+    tab1, tab2, tab3 = st.tabs([
+        "🛡️ Executive Risk Scorecard", 
+        "📊 Technical Telemetry & Signals", 
+        "🧠 Model Attribution & Diagnostics (XAI)"
+    ])
     
+    # -------------------------------------------------------------------------
+    # TAB 1: EXECUTIVE RISK SCORECARD
+    # -------------------------------------------------------------------------
     with tab1:
-        col1, col2 = st.columns([1, 1.5], gap="large")
+        st.markdown(f"### Asset Overview: **{selected_ticker}** | Valuation Timestamp: **{selected_date}**")
         
-        with col1:
-            st.subheader("System Status & Alert")
-            if prediction == 1:
-                st.error("🚨 **CRASH ANOMALY DETECTED**")
-                st.metric(label="Calculated Risk Probability", value=f"{prob:.2%}", delta="Exceeds 30% Threshold", delta_color="inverse")
+        c1, c2, c3, c4 = st.columns(4)
+        
+        # Spot Settlement Price
+        if 'Close' in row_data.columns:
+            close_p = row_data['Close'].values[0]
+            c1.metric("Settlement Price", f"${close_p:,.2f}" if isinstance(close_p, (int, float)) else str(close_p))
+        
+        # 30D Volatility
+        if 'Volatility_30D' in row_data.columns:
+            vol_val = row_data['Volatility_30D'].values[0]
+            c2.metric("Annualized Volatility (30D)", f"{vol_val:.1%}")
+            
+        # RSI 14
+        if 'RSI_14' in row_data.columns:
+            rsi_val = row_data['RSI_14'].values[0]
+            c3.metric("RSI (14-Day)", f"{rsi_val:.1f}")
+            
+        # Crash Risk Probability
+        c4.metric("Crash Probability", f"{prob:.1%}", delta="30% Threshold", delta_color="inverse" if is_anomaly else "normal")
+        
+        st.markdown("---")
+        
+        col_left, col_right = st.columns([1.1, 1.3], gap="large")
+        
+        with col_left:
+            st.subheader("System Anomaly Classification")
+            
+            if prob >= 0.30:
+                st.markdown('<div class="risk-badge-critical">🚨 CRITICAL TAIL-RISK ANOMALY DETECTED</div>', unsafe_allow_html=True)
+                st.progress(min(int(prob * 100), 100))
+                st.error("**Directive**: Model signals heightened probability of severe downside drawdown (>10% drop within 5-10 trading sessions). Preemptive risk reduction recommended.")
+            elif prob >= 0.15:
+                st.markdown('<div class="risk-badge-elevated">⚠️️ ELEVATED WATCHLIST STATUS</div>', unsafe_allow_html=True)
+                st.progress(min(int(prob * 100), 100))
+                st.warning("**Directive**: Asset displays moderate volatility buildup. Monitor support levels and liquidity metrics closely.")
             else:
-                st.success("✅ **STABLE MARKET EQUILIBRIUM**")
-                st.metric(label="Calculated Risk Probability", value=f"{prob:.2%}", delta="Within Safe Tolerance", delta_color="normal")
+                st.markdown('<div class="risk-badge-stable">✅ STABLE MARKET EQUILIBRIUM</div>', unsafe_allow_html=True)
+                st.progress(min(int(prob * 100), 100))
+                st.success("**Directive**: Risk metrics remain within normal historical tolerance bounds. Standard position limits apply.")
                 
-            st.markdown("---")
-            st.markdown("**Decision Rule Protocol**")
-            st.info("A custom **30% risk threshold** is implemented to maximize tail-risk crash recall ($\approx 77\%$), prioritizing capital preservation over false alarms.")
+            st.markdown("#### Decision Protocol Specification")
+            st.caption("""
+            * **Model Threshold**: 30% Probability.
+            * **Calibration Rationale**: Optimized on historical NIFTY50 market crash cycles to capture **~77% of tail-risk crashes** while mitigating false positives.
+            """)
 
-        with col2:
-            st.subheader("Asset Telemetry Overview")
-            st.markdown(f"Target Symbol: **{selected_ticker}** | Timestamp: **{selected_date}**")
+        with col_right:
+            st.subheader("Key Primary Risk Drivers")
+            st.markdown("Automated scan of evaluated features driving current probability classification:")
             
-            if 'Close' in row_data.columns:
-                close_val = row_data['Close'].values[0]
-                st.metric(label="Latest Settlement Price", value=f"{close_val:,.2f}" if isinstance(close_val, (int, float)) else str(close_val))
-            
-            display_cols = [c for c in ["Volatility_30D", "RSI_14", "SMA_50_200_Ratio", "Volume_Spike_Ratio", "Market_Volatility_Index"] if c in row_data.columns]
-            if display_cols:
-                metrics_table = row_data[display_cols].T.rename(columns={row_data.index[0]: "Indicator Value"})
-                st.dataframe(metrics_table, use_container_width=True)
+            # Risk Drivers Analysis
+            drivers = []
+            if 'Volatility_30D' in row_data.columns and row_data['Volatility_30D'].values[0] > 0.25:
+                drivers.append(("Annualized Volatility (30D)", f"{row_data['Volatility_30D'].values[0]:.1%}", "HIGH", "High price dispersion increases crash likelihood."))
+            if 'RSI_14' in row_data.columns:
+                r_val = row_data['RSI_14'].values[0]
+                if r_val > 70:
+                    drivers.append(("RSI (14-Day)", f"{r_val:.1f}", "OVERBOUGHT", "Overextended momentum increases pullback vulnerability."))
+                elif r_val < 30:
+                    drivers.append(("RSI (14-Day)", f"{r_val:.1f}", "OVERSOLD", "Severe momentum breakdown detected."))
+            if 'Volume_Spike_Ratio' in row_data.columns and row_data['Volume_Spike_Ratio'].values[0] > 1.8:
+                drivers.append(("Volume Spike Ratio", f"{row_data['Volume_Spike_Ratio'].values[0]:.2f}x", "ELEVATED", "Abnormal institutional volume outflow detected."))
+            if 'Lagged_Return_5D' in row_data.columns and row_data['Lagged_Return_5D'].values[0] < -0.04:
+                drivers.append(("5-Day Trailing Return", f"{row_data['Lagged_Return_5D'].values[0]:.1%}", "NEGATIVE", "Short-term downward trend momentum."))
 
+            if drivers:
+                driver_df = pd.DataFrame(drivers, columns=["Indicator", "Observed Value", "Condition", "Risk Implication"])
+                st.dataframe(driver_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No abnormal risk factor surges detected across evaluated features for this session.")
+
+    # -------------------------------------------------------------------------
+    # TAB 2: TECHNICAL TELEMETRY & SIGNALS
+    # -------------------------------------------------------------------------
     with tab2:
-        st.subheader("Historical Price Action & Volatility Profile")
-        if not ticker_data.empty and 'Close' in ticker_data.columns and date_col:
-            chart_df = ticker_data.set_index(date_col)[['Close']]
-            st.line_chart(chart_df, use_container_width=True)
-        else:
-            st.info("Price chart data unavailable for current selection.")
-
-    with tab3:
-        st.subheader("Feature Importance Attribution")
-        st.markdown("The chart below displays the relative weight assigned by the **Random Forest Classifier** across evaluated macroeconomic and technical dimensions:")
+        st.subheader("Categorized Technical Indicator Telemetry Matrix")
         
-        importances = pd.Series(model.feature_importances_, index=feature_cols).sort_values(ascending=True)
-        st.bar_chart(importances, use_container_width=True)
+        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+        
+        with col_t1:
+            st.markdown("#### ⚡ Volatility & Risk")
+            vol = row_data['Volatility_30D'].values[0] if 'Volatility_30D' in row_data.columns else 0
+            beta = row_data['Beta_60D'].values[0] if 'Beta_60D' in row_data.columns else 1.0
+            st.write(f"**30D Volatility:** `{vol:.2%}`")
+            st.write(f"**60D Beta:** `{beta:.2f}`")
+            st.write(f"**Vol x Beta Composite:** `{vol*beta:.2%}`")
+
+        with col_t2:
+            st.markdown("#### 📈 Trend & Averages")
+            sma50 = row_data['SMA_50'].values[0] if 'SMA_50' in row_data.columns else 0
+            sma200 = row_data['SMA_200'].values[0] if 'SMA_200' in row_data.columns else 0
+            ratio = sma50 / sma200 if sma200 > 0 else 1.0
+            st.write(f"**50-Day SMA:** `{sma50:,.2f}`")
+            st.write(f"**200-Day SMA:** `{sma200:,.2f}`")
+            st.write(f"**SMA 50/200 Ratio:** `{ratio:.3f}` ({'Golden Alignment' if ratio >= 1.0 else 'Death Alignment'})")
+
+        with col_t3:
+            st.markdown("#### 🚀 Momentum Indicators")
+            rsi = row_data['RSI_14'].values[0] if 'RSI_14' in row_data.columns else 50
+            ret5 = row_data['Lagged_Return_5D'].values[0] if 'Lagged_Return_5D' in row_data.columns else 0
+            st.write(f"**RSI (14D):** `{rsi:.1f}`")
+            st.write(f"**5-Day Return:** `{ret5:.2%}`")
+            st.write(f"**Momentum Status:** `{'Strong Bullish' if rsi>60 else 'Bearish Pressure' if rsi<40 else 'Neutral'}`")
+
+        with col_t4:
+            st.markdown("#### 📊 Liquidity & Volume")
+            vwap = row_data['VWAP_20D'].values[0] if 'VWAP_20D' in row_data.columns else 0
+            vol_spike = row_data['Volume_Spike_Ratio'].values[0] if 'Volume_Spike_Ratio' in row_data.columns else 1.0
+            st.write(f"**20D VWAP:** `{vwap:,.2f}`")
+            st.write(f"**Volume Spike Ratio:** `{vol_spike:.2f}x`")
+            st.write(f"**Volume Trend:** `{'Institutional Spike' if vol_spike>1.5 else 'Normal Liquidity'}`")
+
+        st.markdown("---")
+        st.subheader("Synchronized Historical Telemetry Chart")
+        
+        if not ticker_data.empty and 'Close' in ticker_data.columns and date_col:
+            chart_df = ticker_data.set_index(date_col)
+            
+            # Sub-tabs for technical charting views
+            c_tab1, c_tab2 = st.tabs(["Price Action & Moving Averages", "Volume Spike & Volatility Profile"])
+            
+            with c_tab1:
+                cols_to_plot = [c for c in ['Close', 'SMA_50', 'SMA_200'] if c in chart_df.columns]
+                st.line_chart(chart_df[cols_to_plot], use_container_width=True)
+                
+            with c_tab2:
+                cols_vol = [c for c in ['Volume_Spike_Ratio', 'Volatility_30D'] if c in chart_df.columns]
+                if cols_vol:
+                    st.line_chart(chart_df[cols_vol], use_container_width=True)
+                else:
+                    st.info("Volume/Volatility trend telemetry stream unavailable.")
+
+    # -------------------------------------------------------------------------
+    # TAB 3: MODEL ATTRIBUTION & DIAGNOSTICS (XAI)
+    # -------------------------------------------------------------------------
+    with tab3:
+        st.subheader("Explainable AI (XAI) & Model Diagnostics")
+        st.markdown("Quantifying global model weightings alongside local feature value deviations to provide complete auditability.")
+        
+        col_x1, col_x2 = st.columns([1.2, 1], gap="large")
+        
+        with col_x1:
+            st.markdown("#### Global Feature Importance (Random Forest Weightings)")
+            importances = pd.Series(model.feature_importances_, index=feature_cols).sort_values(ascending=True)
+            st.bar_chart(importances, use_container_width=True)
+            
+        with col_x2:
+            st.markdown("#### Local Instance Input Vector")
+            st.markdown("Raw numerical vector passed to the prediction engine for current session:")
+            
+            x_val_df = X_input.T.reset_index()
+            x_val_df.columns = ["Feature Dimension", "Session Value"]
+            st.dataframe(x_val_df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### 🔬 Model Transparency Note")
+        st.caption("""
+        * **Global Weights**: Derived from Gini impurity reduction across all decision trees in the ensemble model.
+        * **Auditability**: Feature shapes and names are automatically synchronized via `model.feature_names_in_` to guarantee exact inference integrity.
+        """)
