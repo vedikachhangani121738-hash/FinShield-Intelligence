@@ -17,7 +17,7 @@ st.markdown(
     """
     <style>
     /* Professional Terminal Focus: Highlight the 1st column (Crash Probability) */
-    [data-testid="column"]:nth-child(4) {
+    [data-testid="column"]:nth-child(1) {
         background: linear-gradient(145deg, #1e293b 0%, #292016 100%) !important;
         border: 2px solid #F59E0B !important;
         border-radius: 10px !important;
