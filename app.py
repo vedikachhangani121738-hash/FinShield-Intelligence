@@ -32,7 +32,6 @@ st.markdown(
 # Change your column order from (Price, Vol, RSI, Crash) to (Crash, Price, Vol, RSI)
 col1, col2, col3, col4 = st.columns(4)
 
-with col1:
     # 1. Define your model output values (use your actual variables here)
 crash_prob = 27.6  # Example percentage from your Random Forest model
 threshold = 30.0   # Your warning threshold
