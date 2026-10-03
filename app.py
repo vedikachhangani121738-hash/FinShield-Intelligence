@@ -16,6 +16,19 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Give the Crash Probability card (4th column) a standout accent border and glow */
+    [data-testid="stHorizontalBlock"] > div:nth-child(4) {
+        border: 2px solid #F59E0B !important; /* Vibrant amber/warning accent */
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+        border-radius: 0.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown(
+    """
+    <style>
     /* Change sidebar text and labels to white for high contrast */
     [data-testid="stSidebar"] span, 
     [data-testid="stSidebar"] label, 
