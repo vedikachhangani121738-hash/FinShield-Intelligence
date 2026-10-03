@@ -66,7 +66,7 @@ with col4:
 st.markdown(
     """
     <style>
-    /* Give the Crash Probability card (4th column) a standout accent border and glow */
+    /* Give the Crash Probability card (1st column) a standout accent border and glow */
     [data-testid="stHorizontalBlock"] > div:nth-child(4) {
         border: 2px solid #F59E0B !important; /* Vibrant amber/warning accent */
         box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
