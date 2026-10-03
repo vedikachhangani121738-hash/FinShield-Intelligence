@@ -16,10 +16,10 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Target only sidebar widget labels, markdown text, and captions that are currently invisible */
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .stMarkdown p,
-    [data-testid="stSidebar"] [data-testid="stCaption"] {
+    /* Change sidebar text and labels to white for high contrast */
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] p {
         color: #FFFFFF !important;
     }
     </style>
