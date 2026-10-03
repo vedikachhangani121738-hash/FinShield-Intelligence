@@ -32,30 +32,30 @@ st.markdown(
 # Change your column order from (Price, Vol, RSI, Crash) to (Crash, Price, Vol, RSI)
 col1, col2, col3, col4 = st.columns(4)
 
-    # 1. Define your model output values (use your actual variables here)
-crash_prob = 27.6  # Example percentage from your Random Forest model
+    # 1. Your model calculates the crash probability for the searched stock here:
+# (Replace 'your_actual_model_probability_variable' with whatever variable name 
+# your Random Forest model uses in your code)
+crash_prob = round(your_actual_model_probability_variable, 1) 
+
 threshold = 30.0   # Your warning threshold
 
-# 2. Evaluate risk state dynamically
+# 2. Dynamic risk evaluation
 is_high_risk = crash_prob >= threshold
 
-# 3. Assign institutional color styling based on risk state
 if is_high_risk:
-    # High Risk -> Crimson Red Theme
     bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
-    border_color = "#EF4444"  # Vibrant Red
+    border_color = "#EF4444"
     shadow_color = "rgba(239, 68, 68, 0.4)"
     status_text = f"▲ High Risk (Above {threshold}% Threshold)"
     status_color = "#FCA5A5"
 else:
-    # Low Risk / Stable -> Emerald Green Theme
     bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
-    border_color = "#10B981"  # Vibrant Green
+    border_color = "#10B981"
     shadow_color = "rgba(16, 185, 129, 0.4)"
     status_text = f"▼ Safe (Below {threshold}% Threshold)"
     status_color = "#6EE7B7"
 
-# 4. Render the dynamic card in the first column
+# 3. Render the columns right here
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
