@@ -13,6 +13,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+st.markdown(
+    """
+    <style>
+    /* Target only sidebar widget labels, markdown text, and captions that are currently invisible */
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] [data-testid="stCaption"] {
+        color: #FFFFFF !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
 st.markdown("""
