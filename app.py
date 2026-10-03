@@ -33,12 +33,48 @@ st.markdown(
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    # MOVE CRASH PROBABILITY HERE (Column 1 - Leftmost position)
-    st.metric(
-        label="CRASH PROBABILITY",
-        value="27.6%",
-        delta="30% Threshold",
-        delta_color="off",
+    # 1. Define your model output values (use your actual variables here)
+crash_prob = 27.6  # Example percentage from your Random Forest model
+threshold = 30.0   # Your warning threshold
+
+# 2. Evaluate risk state dynamically
+is_high_risk = crash_prob >= threshold
+
+# 3. Assign institutional color styling based on risk state
+if is_high_risk:
+    # High Risk -> Crimson Red Theme
+    bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
+    border_color = "#EF4444"  # Vibrant Red
+    shadow_color = "rgba(239, 68, 68, 0.4)"
+    status_text = f"▲ High Risk (Above {threshold}% Threshold)"
+    status_color = "#FCA5A5"
+else:
+    # Low Risk / Stable -> Emerald Green Theme
+    bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
+    border_color = "#10B981"  # Vibrant Green
+    shadow_color = "rgba(16, 185, 129, 0.4)"
+    status_text = f"▼ Safe (Below {threshold}% Threshold)"
+    status_color = "#6EE7B7"
+
+# 4. Render the dynamic card in the first column
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.markdown(
+        f"""
+        <div style="
+            background: {bg_gradient};
+            border: 2px solid {border_color};
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 6px 20px {shadow_color};
+        ">
+            <div style="color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">CRASH PROBABILITY</div>
+            <div style="color: #FFFFFF; font-size: 26px; font-weight: 700; margin: 4px 0 2px 0;">{crash_prob}%</div>
+            <div style="color: {status_color}; font-size: 11px; font-weight: 500;">{status_text}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 with col2:
