@@ -29,6 +29,40 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# Change your column order from (Price, Vol, RSI, Crash) to (Crash, Price, Vol, RSI)
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    # MOVE CRASH PROBABILITY HERE (Column 1 - Leftmost position)
+    st.metric(
+        label="CRASH PROBABILITY",
+        value="27.6%",
+        delta="30% Threshold",
+        delta_color="off",
+    )
+
+with col2:
+    st.metric(label="SETTLEMENT PRICE", value="$1,167.70")
+
+with col3:
+    st.metric(label="ANNUALIZED VOLATILITY (30D)", value="18.6%")
+
+with col4:
+    st.metric(label="RSI (14-DAY)", value="26.1")
+    st.markdown(
+    """
+    <style>
+    /* Highlight the 1st metric card (Crash Probability) as the primary terminal conclusion */
+    [data-testid="column"]:nth-child(1) {
+        background: linear-gradient(145deg, #1e293b 0%, #3a2318 100%) !important;
+        border: 2px solid #F59E0B !important;
+        border-radius: 10px !important;
+        box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.markdown(
     """
     <style>
