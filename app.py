@@ -261,7 +261,7 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
 
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
