@@ -42,13 +42,26 @@ st.markdown("""
     }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     
-    /* FIX: Ensure input text and selectbox text inside sidebar widgets are clearly visible (Dark Blue) */
+    /* FIX: Ensure input text, selectbox text, and dropdown items are clearly visible (Dark Blue) */
     [data-testid="stSidebar"] .stTextInput input, 
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span {
+    [data-testid="stSidebar"] .stSelectbox div,
+    [data-testid="stSidebar"] .stSelectbox span,
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] * {
         color: #0A2540 !important;
     }
     [data-testid="stSidebar"] .stTextInput input::placeholder {
         color: #94A3B8 !important;
+    }
+    
+    /* Dropdown menu items popup styling */
+    div[data-baseweb="menu"], div[role="listbox"] {
+        background-color: #FFFFFF !important;
+    }
+    div[data-baseweb="menu"] *, div[role="option"] * {
+        color: #0A2540 !important;
+    }
+    div[role="option"]:hover {
+        background-color: #F1F5F9 !important;
     }
     
     h1, h2, h3 { 
