@@ -475,7 +475,7 @@ elif "3." in app_mode:
             st.markdown(f"""
             <div class="fin-card" style="border-left: 5px solid #0A2540;">
                 <p style="color: #64748B; margin: 0; font-size: 0.85rem; font-weight: 600;">BUY & HOLD FINAL VALUE</p>
-                <h3 style="color: #0F172A; margin: 4px 0 2px 0; font-size: 1.8rem;">₹{bh_initial := 100:,.2f} ➔ ₹{bh_final:,.2f}</h3>
+                <h3 style="color: #0F172A; margin: 4px 0 2px 0; font-size: 1.8rem;">₹100.00 ➔ ₹{bh_final:,.2f}</h3>
                 <p style="margin: 0; font-weight: 600; color: {'#00E676' if bh_final >= 100 else '#FF1744'}; font-size: 0.9rem;">Return: {bh_final - 100:+.2f}%</p>
             </div>
             """, unsafe_allow_html=True)
