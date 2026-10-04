@@ -266,7 +266,8 @@ else:
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
             row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-            with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
+            
+    with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
     st.markdown("Test real-world scenarios in plain English:")
     
     # 1. Plain-English Slider: Market Fear
