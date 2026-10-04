@@ -7,10 +7,11 @@ import yfinance as yf
 import joblib
 from datetime import datetime
 import sqlite3
+import requests
 import matplotlib.pyplot as plt
 import io
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+from reportlab.pdfgen::canvas import Canvas if False else from reportlab.pdfgen import canvas
 
 # Safe SHAP import to prevent startup crashes if package is missing
 try:
@@ -143,8 +144,30 @@ def clear_trade_ledger_db():
     db_conn.commit()
 
 # ==========================================
-# 3. GLOBAL LIVE YFINANCE & PIPELINES
+# 3. GLOBAL LIVE YFINANCE & SEARCH PIPELINES
 # ==========================================
+@st.cache_data(ttl=3600)
+def get_ticker_suggestions(query):
+    if not query or len(query.strip()) < 2:
+        return []
+    try:
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query.strip()}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            quotes = data.get('quotes', [])
+            suggestions = []
+            for q in quotes:
+                sym = q.get('symbol')
+                name = q.get('shortname') or q.get('longname') or sym
+                exch = q.get('exchange', '')
+                suggestions.append(f"{sym} | {name} ({exch})")
+            return suggestions
+    except Exception:
+        pass
+    return []
+
 @st.cache_data(ttl=900)
 def fetch_live_data(ticker):
     clean_ticker = ticker.strip()
@@ -281,14 +304,27 @@ def render_news_feed(ticker_symbol):
     except Exception:
         st.info("Live news stream temporarily unavailable for this asset symbol.")
 
-popular_tickers = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "TATAMOTORS.NS", "AAPL", "GOOGL", "TSLA", "Custom Ticker..."]
+def smart_ticker_selector(key_prefix):
+    popular_defaults = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "AAPL", "GOOGL", "TSLA", "NVDA", "BTC-USD"]
+    search_input = st.text_input("🔍 Type Any Stock Name or Ticker (e.g., Tata, Apple, Reliance, Microsoft):", value="", key=f"{key_prefix}_search")
+    
+    if search_input and len(search_input.strip()) >= 2:
+        suggestions = get_ticker_suggestions(search_input)
+        if suggestions:
+            chosen = st.selectbox("Select exact matched asset from yFinance:", suggestions, key=f"{key_prefix}_choice")
+            return chosen.split(" | ")[0].strip()
+        else:
+            return search_input.strip().upper()
+    else:
+        chosen_pop = st.selectbox("Or select from popular institutional assets:", popular_defaults, key=f"{key_prefix}_pop")
+        return chosen_pop
 
 # ==========================================
 # 4. SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
     st.markdown("<h2>🛡 FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.85rem; margin-top:-10px;'>Global Institutional Terminal v4.5</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94A3B8; font-size:0.85rem; margin-top:-10px;'>Global Institutional Terminal v4.6</p>", unsafe_allow_html=True)
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
     
     app_mode = st.radio(
@@ -302,7 +338,7 @@ with st.sidebar:
         ]
     )
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:0.8rem; color:#94A3B8;'>🟢 Universal yFinance Feed: <b style='color:#00E676;'>ACTIVE</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.8rem; color:#94A3B8;'>🟢 Universal yFinance Search: <b style='color:#00E676;'>ACTIVE</b></p>", unsafe_allow_html=True)
 
 # ==========================================
 # 5. MODULE EXECUTIONS
@@ -311,17 +347,9 @@ with st.sidebar:
 # --- MODULE 1: STOCK CRASH-RISK PREDICTOR ---
 if "1." in app_mode:
     st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Select or search any live global stock ticker from the institutional dropdown feed.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any company name or stock symbol globally to run institutional crash risk intelligence.</p>", unsafe_allow_html=True)
     
-    search_col, _ = st.columns([1.5, 1.5])
-    with search_col:
-        selected_ticker_option = st.selectbox("🔍 Select or Search Asset Ticker:", popular_tickers, index=0, key="m1_dropdown")
-        if selected_ticker_option == "Custom Ticker...":
-            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m1_custom")
-            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
-        else:
-            ticker = selected_ticker_option
-
+    ticker = smart_ticker_selector("m1")
     df_raw = fetch_live_data(ticker)
     
     if not df_raw.empty and len(df_raw) > 5:
@@ -389,23 +417,16 @@ if "1." in app_mode:
         render_news_feed(ticker)
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error(f"Unable to pull live market data for symbol '{ticker}'.")
+        st.error(f"Unable to pull live market data for symbol '{ticker}'. Please check the ticker name or try searching again.")
 
 # --- MODULE 2: TECHNICAL TELEMETRY ---
 elif "2." in app_mode:
     st.markdown("<h1>📊 Technical Telemetry & Momentum Health</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Inspect interactive live moving averages, RSI momentum, and MACD divergence telemetry.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any global stock to inspect interactive moving averages, RSI momentum, and MACD divergence telemetry.</p>", unsafe_allow_html=True)
     
-    search_col, _ = st.columns([1.5, 1.5])
-    with search_col:
-        selected_ticker_option = st.selectbox("🔍 Select or Search Ticker for Telemetry:", popular_tickers, index=0, key="m2_dropdown")
-        if selected_ticker_option == "Custom Ticker...":
-            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m2_custom")
-            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
-        else:
-            ticker = selected_ticker_option
-
+    ticker = smart_ticker_selector("m2")
     df_raw = fetch_live_data(ticker)
+    
     if not df_raw.empty and len(df_raw) > 30:
         df = compute_technical_indicators(df_raw)
         latest_rsi, latest_macd, latest_sma20, latest_close = df['RSI'].iloc[-1], df['MACD'].iloc[-1], df['SMA_20'].iloc[-1], df['Close'].iloc[-1]
@@ -448,22 +469,16 @@ elif "2." in app_mode:
         st.plotly_chart(fig_ma, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error("Could not load historical indicator data.")
+        st.error("Could not load historical indicator data for this symbol.")
 
 # --- MODULE 3: HISTORICAL STRATEGY BACKTESTER ---
 elif "3." in app_mode:
     st.markdown("<h1>🧪 Historical Strategy Backtester</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Simulate rule-based risk mitigation strategies over historical 1-year asset price action.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any stock to simulate rule-based risk mitigation strategies over historical 1-year price action.</p>", unsafe_allow_html=True)
     
-    search_col, _ = st.columns([1.5, 1.5])
-    with search_col:
-        selected_ticker_option = st.selectbox("🔍 Select Asset for Backtest:", popular_tickers, index=0, key="m3_dropdown")
-        if selected_ticker_option == "Custom Ticker...":
-            ticker = st.text_input("Enter Ticker Symbol:", value="RELIANCE.NS", key="m3_custom").strip().upper()
-        else:
-            ticker = selected_ticker_option
-
+    ticker = smart_ticker_selector("m3")
     df_raw = fetch_live_data(ticker)
+    
     if not df_raw.empty and len(df_raw) > 50:
         df = df_raw.copy()
         df['Daily_Return'] = df['Close'].pct_change()
@@ -566,12 +581,7 @@ elif "5." in app_mode:
     with col_trade:
         st.markdown('<div class="fin-card">', unsafe_allow_html=True)
         st.markdown("### Execute Simulation Order")
-        selected_trade_opt = st.selectbox("Select Asset Ticker", popular_tickers, index=0, key="trade_dropdown")
-        if selected_trade_opt == "Custom Ticker...":
-            trade_ticker = st.text_input("Enter Ticker Symbol:", value="RELIANCE.NS", key="trade_custom").strip().upper()
-        else:
-            trade_ticker = selected_trade_opt
-
+        trade_ticker = smart_ticker_selector("trade")
         trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
         shares = st.number_input("Quantity", min_value=1, max_value=10000, value=10)
         
