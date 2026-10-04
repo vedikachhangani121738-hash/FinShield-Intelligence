@@ -125,17 +125,17 @@ with st.sidebar:
     st.caption("🟢 Universal yFinance Feed: **ACTIVE**")
 
 # ==========================================
-# 5. MODULE EXECUTIONS (ARTIFACT-FREE)
+# 5. MODULE EXECUTIONS (ARTIFACT-FREE & LIVE)
 # ==========================================
 
 # --- MODULE 1 ---
 if "1." in app_mode:
     st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search any global stock or asset ticker linked directly to live market feeds.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search any live global stock ticker linked directly to real-time market feeds.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
-        raw_ticker = st.text_input("🔍 Search Any Global Ticker:", value="RELIANCE.NS", key="m1_search")
+        raw_ticker = st.text_input("🔍 Search Any Live Global Ticker:", value="RELIANCE.NS", key="m1_search")
         ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
 
     df = fetch_live_data(ticker)
@@ -154,7 +154,7 @@ if "1." in app_mode:
 
             st.markdown(f"""
             <div class="blue-card" style="border-left-color: {risk_color};">
-                <p style="font-size: 1rem; color: #94A3B8 !important;">{ticker} MARKET PRICE</p>
+                <p style="font-size: 1rem; color: #94A3B8 !important;">{ticker} LIVE MARKET PRICE</p>
                 <h2 style="font-size: 2.2rem;">₹{ltp:,.2f} <span style="font-size: 1rem; color: {'#00E676' if change_pct > 0 else '#FF1744'};">({change_pct:+.2f}%)</span></h2>
                 <hr style="border-color: #1E293B;">
                 <p style="font-size: 1rem; color: #94A3B8 !important;">30-DAY CRASH PROBABILITY</p>
@@ -194,7 +194,7 @@ if "1." in app_mode:
 # --- MODULE 2 ---
 elif "2." in app_mode:
     st.markdown("<h1>📊 Technical Telemetry & Indicators</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts from live market feeds.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
@@ -255,7 +255,19 @@ elif "3." in app_mode:
     if category_filter != "All Categories":
         filtered_df = filtered_df[filtered_df['Category'] == category_filter]
         
-    st.markdown(f"### Institutional Mutual Fund Screener Database ({len(filtered_df)} Schemes Found)")
+    # UI Upgrade: Distinguishable summary metrics for Mutual Funds
+    if not filtered_df.empty:
+        top_fund = filtered_df.loc[filtered_df['1Y Return (%)'].idxmax()]
+        avg_return = filtered_df['1Y Return (%)'].mean()
+        avg_expense = filtered_df['Expense Ratio (%)'].mean()
+        
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("Filtered Schemes Count", len(filtered_df), delta=f"Category: {category_filter}")
+        mc2.metric("Top 1Y Performer", f"{top_fund['Fund Name']}", delta=f"{top_fund['1Y Return (%)']}%")
+        mc3.metric("Avg. Expense Ratio", f"{avg_expense:.2f}%", delta=f"Avg Return: {avg_return:.1f}%", delta_color="inverse")
+        st.markdown("---")
+
+    st.markdown(f"### 📋 Institutional Screener Database")
     st.dataframe(filtered_df, hide_index=True, use_container_width=True)
     
     with st.expander("🌐 Lookup Live Custom Mutual Fund / ETF Ticker (yfinance)"):
@@ -338,7 +350,7 @@ elif "5." in app_mode:
 # --- MODULE 6: PAPER TRADING & AI LEDGER ---
 elif "6." in app_mode:
     st.markdown("<h1>📋 Paper Trading & AI Ledger</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking and live price execution.</p>", unsafe_allow_html=True)
     
     st.markdown(f"""
     <div class="blue-card" style="border-left-color: #00E676;">
