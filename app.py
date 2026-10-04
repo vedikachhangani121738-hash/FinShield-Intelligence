@@ -27,7 +27,7 @@ import os
 from mftool import Mftool
 
 st.set_page_config(
-    page_title="AlphaShield | Universal Multi-Asset Intelligence Suite",
+    page_title="AlphaShield | Stock & Mutual Fund Intelligence",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -104,7 +104,6 @@ funds_df = pd.DataFrame(bundle['sample_funds'])
 obj, all_schemes_df = load_all_schemes()
 
 def get_ai_reasoning(feat_dict, prob):
-    """Explainable AI (XAI) engine generating qualitative decision rationale."""
     reasons = []
     if feat_dict['Volatility_30D'] > 20.0:
         reasons.append(f"Elevated 30-day volatility ({feat_dict['Volatility_30D']:.1f}%) reflecting heightened short-term market turbulence.")
@@ -195,25 +194,13 @@ def compute_scheme_metrics(scheme_code):
     reasoning_list = get_ai_reasoning(feat_dict, prob)
     
     return {
-        'name': scheme_name,
-        'category': category,
-        'amc': amc,
-        'nav': current_nav,
-        'ret_1m': ret_1m,
-        'ret_1y': ret_1y,
-        'ret_3y': ret_3y_cagr,
-        'vol': ann_vol,
-        'drawdown_1y': max_drawdown_1y,
-        'sharpe': sharpe,
-        'sortino': sortino,
-        'comp_score': comp_score,
-        'prob': prob,
-        'reasoning': reasoning_list,
-        'df_nav': df_nav
+        'name': scheme_name, 'category': category, 'amc': amc, 'nav': current_nav,
+        'ret_1m': ret_1m, 'ret_1y': ret_1y, 'ret_3y': ret_3y_cagr, 'vol': ann_vol,
+        'drawdown_1y': max_drawdown_1y, 'sharpe': sharpe, 'sortino': sortino,
+        'comp_score': comp_score, 'prob': prob, 'reasoning': reasoning_list, 'df_nav': df_nav
     }
 
 def run_monte_carlo_var(portfolio_val, portfolio_vol=18.0, crash_prob=0.1, days=30, sims=1000):
-    """Monte Carlo 30-day Value-at-Risk (VaR) Simulator."""
     if portfolio_val <= 0:
         return 0.0, np.array([0]), 0.0
     daily_vol = (portfolio_vol / 100.0) / np.sqrt(252)
@@ -228,7 +215,6 @@ def run_monte_carlo_var(portfolio_val, portfolio_vol=18.0, crash_prob=0.1, days=
 def generate_audit_report(res):
     verdict_badge = "#c62828" if res['prob'] >= 0.6 else ("#f57f17" if res['prob'] >= 0.3 else "#2e7d32")
     verdict_text = "CRITICAL DISTRESS RISK" if res['prob'] >= 0.6 else ("WATCHLIST / MODERATE RISK" if res['prob'] >= 0.3 else "HEALTHY / SAFE ALLOCATION")
-    
     reasons_html = "".join([f"<li>{r}</li>" for r in res['reasoning']])
     
     return f"""
@@ -250,16 +236,12 @@ def generate_audit_report(res):
     <body>
         <div class="brand">🛡️ AlphaShield Institutional Risk & AI Audit</div>
         <h2>{res['name']}</h2>
-        <p><strong>Category:</strong> {res['category']} | <strong>AMC:</strong> {res['amc']} | <strong>Live Price/NAV:</strong> ₹{res['nav']:.2f}</p>
+        <p><strong>Category:</strong> {res['category']} | <strong>AMC:</strong> {res['amc']} | <strong>Live NAV:</strong> ₹{res['nav']:.2f}</p>
         <div class="badge">{verdict_text} (30-Day Forward Crash Probability: {res['prob']*100:.1f}%)</div>
-        
         <div class="rationale">
             <h3>🧠 Explainable AI Decision Rationale (Why this score?)</h3>
-            <ul>
-                {reasons_html}
-            </ul>
+            <ul>{reasons_html}</ul>
         </div>
-
         <table>
             <tr><th>Metric</th><th>Observed Value</th><th>Benchmark Threshold</th></tr>
             <tr><td>Forward Crash Probability</td><td>{res['prob']*100:.1f}%</td><td>&lt; 30.0%</td></tr>
@@ -278,13 +260,13 @@ if 'cash' not in st.session_state:
 if 'portfolio' not in st.session_state:
     st.session_state.portfolio = []
 
-st.sidebar.header("🕹️ Analytics Suite")
+st.sidebar.header("🕹️ Navigation Menu")
 app_mode = st.sidebar.radio(
-    "Choose Analysis Module:",
+    "Select Dashboard / Module:",
     [
         "📈 NIFTY50 Stock Crash-Risk Predictor",
-        "⚔️ Head-to-Head Scheme Duel",
-        "🔍 Single Scheme Intelligence & Stress-Tester",
+        "🛡️ Mutual Fund Intelligence Suite",
+        "⚔️ Head-to-Head Fund Duel",
         "💼 Universal Paper Trading & AI Ledger",
         "📊 Monte Carlo Portfolio VaR Simulator",
         "📁 Historical Dataset Archive"
@@ -292,11 +274,11 @@ app_mode = st.sidebar.radio(
 )
 
 # ==============================================================================
-# VIEW 0: NIFTY50 STOCK CRASH-RISK PREDICTOR
+# DASHBOARD 1: NIFTY50 STOCK CRASH-RISK PREDICTOR (Your Original Core App)
 # ==============================================================================
 if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     st.title("📈 NIFTY50 Stock Crash-Risk Predictor")
-    st.markdown("Evaluate individual equity risk profiles and generate transparent AI decision rationale.")
+    st.markdown("Evaluate individual equity risk profiles using machine learning classification and transparent AI decision rationale (30-day horizon).")
     
     col_s1, col_s2 = st.columns(2)
     with col_s1:
@@ -325,15 +307,59 @@ if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
         else:
             st.success(f"### 🟢 LOW CRASH RISK ({stock_prob*100:.1f}% over next 30 days)")
             
-        st.markdown("#### 🧠 Explainable AI Rationale:")
+        st.metric("Predicted 30-Day Crash Probability", f"{stock_prob*100:.1f}%")
+        st.markdown("#### 🧠 Explainable AI Decision Rationale:")
         for r in reasons:
             st.write(f"- {r}")
 
 # ==============================================================================
-# VIEW 1: HEAD-TO-HEAD SCHEME DUEL
+# DASHBOARD 2: MUTUAL FUND INTELLIGENCE SUITE
 # ==============================================================================
-elif app_mode == "⚔️ Head-to-Head Scheme Duel":
-    st.title("⚔️ Live Head-to-Head Scheme Duel")
+elif app_mode == "🛡️ Mutual Fund Intelligence Suite":
+    st.title("🛡️ Mutual Fund Intelligence & Stress-Testing Suite")
+    st.markdown("Analyze live AMFI mutual fund schemes, evaluate distress indicators, run crisis stress tests, and export factsheets.")
+    
+    trade_source = st.radio("Selection Source:", ["⭐ Popular Active Benchmark Schemes", "🔎 Search Full Scheme Universe"], horizontal=True)
+    c_in, c_bt = st.columns([3.5, 1])
+    with c_in:
+        if trade_source.startswith("⭐"):
+            chosen_label = st.selectbox("Select Benchmark Fund:", list(ACTIVE_BENCHMARK_FUNDS.keys()), key="preset_single_sel")
+            selected_code = ACTIVE_BENCHMARK_FUNDS[chosen_label]
+        else:
+            search_options = all_schemes_df['Search_Label'].tolist() if not all_schemes_df.empty else list(ACTIVE_BENCHMARK_FUNDS.keys())
+            selection = st.selectbox("Search any scheme:", options=search_options, index=0)
+            selected_code = all_schemes_df[all_schemes_df['Search_Label'] == selection]['Scheme_Code'].iloc[0] if not all_schemes_df.empty else "118989"
+    with c_bt:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        audit_btn = st.button("🚀 Analyze Live Scheme", type="primary", use_container_width=True)
+        
+    if selected_code:
+        with st.spinner("Fetching AMFI data and evaluating AI risk profile..."):
+            try:
+                res = compute_scheme_metrics(selected_code)
+                st.markdown(f"**Scheme:** `{res['name']}` | **Category:** `{res['category']}` | **Live NAV:** `₹{res['nav']:.2f}`")
+                
+                tab_core, tab_stress, tab_export = st.tabs(["📊 Core Risk & Rationale", "⚡ Crisis Stress-Testing", "📄 Executive Factsheet"])
+                with tab_core:
+                    st.metric("30-Day Forward Crash Probability", f"{res['prob']*100:.1f}%")
+                    st.markdown("#### 🧠 Decision Rationale:")
+                    for r in res['reasoning']:
+                        st.write(f"- {r}")
+                with tab_stress:
+                    sim_shock = st.slider("Simulate Hypothetical Market Crash (% Shock):", -40, -5, -20, step=5)
+                    est_loss = sim_shock * (res['vol'] / 15.0)
+                    st.metric(f"Simulated {sim_shock}% Shock Impact", f"{est_loss:.1f}% Loss")
+                with tab_export:
+                    report_html = generate_audit_report(res)
+                    st.download_button("📥 Download Executive HTML Factsheet", data=report_html, file_name=f"Audit_{selected_code}.html", mime="text/html")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+# ==============================================================================
+# MODULE 3: HEAD-TO-HEAD FUND DUEL
+# ==============================================================================
+elif app_mode == "⚔️ Head-to-Head Fund Duel":
+    st.title("⚔️️ Live Head-to-Head Fund Duel")
     duel_source = st.radio("Selection Source:", ["⭐ Popular Active Benchmark Schemes", "🔎 Search Universal Schemes"], horizontal=True, key="duel_src")
     
     col_a, col_b = st.columns(2)
@@ -378,48 +404,7 @@ elif app_mode == "⚔️ Head-to-Head Scheme Duel":
                 st.error(f"Duel error: {e}")
 
 # ==============================================================================
-# VIEW 2: SINGLE SCHEME INTELLIGENCE & STRESS-TESTER
-# ==============================================================================
-elif app_mode == "🔍 Single Scheme Intelligence & Stress-Tester":
-    st.title("🔍 Single Scheme Intelligence & Stress-Testing")
-    trade_source = st.radio("Selection Source:", ["⭐ Popular Active Benchmark Schemes", "🔎 Search Full Scheme Universe"], horizontal=True)
-    c_in, c_bt = st.columns([3.5, 1])
-    with c_in:
-        if trade_source.startswith("⭐"):
-            chosen_label = st.selectbox("Select Benchmark Fund:", list(ACTIVE_BENCHMARK_FUNDS.keys()), key="preset_single_sel")
-            selected_code = ACTIVE_BENCHMARK_FUNDS[chosen_label]
-        else:
-            search_options = all_schemes_df['Search_Label'].tolist() if not all_schemes_df.empty else list(ACTIVE_BENCHMARK_FUNDS.keys())
-            selection = st.selectbox("Search any scheme:", options=search_options, index=0)
-            selected_code = all_schemes_df[all_schemes_df['Search_Label'] == selection]['Scheme_Code'].iloc[0] if not all_schemes_df.empty else "118989"
-    with c_bt:
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        audit_btn = st.button("🚀 Analyze Live Scheme", type="primary", use_container_width=True)
-        
-    if selected_code:
-        with st.spinner("Fetching AMFI data and evaluating AI risk profile..."):
-            try:
-                res = compute_scheme_metrics(selected_code)
-                st.markdown(f"**Scheme:** `{res['name']}` | **Category:** `{res['category']}` | **Live NAV:** `₹{res['nav']:.2f}`")
-                
-                tab_core, tab_stress, tab_export = st.tabs(["📊 Core Risk & Rationale", "⚡ Crisis Stress-Testing", "📄 Executive Factsheet"])
-                with tab_core:
-                    st.metric("30-Day Forward Crash Probability", f"{res['prob']*100:.1f}%")
-                    st.markdown("#### 🧠 Decision Rationale:")
-                    for r in res['reasoning']:
-                        st.write(f"- {r}")
-                with tab_stress:
-                    sim_shock = st.slider("Simulate Hypothetical Market Crash (% Shock):", -40, -5, -20, step=5)
-                    est_loss = sim_shock * (res['vol'] / 15.0)
-                    st.metric(f"Simulated {sim_shock}% Shock Impact", f"{est_loss:.1f}% Loss")
-                with tab_export:
-                    report_html = generate_audit_report(res)
-                    st.download_button("📥 Download Executive HTML Factsheet", data=report_html, file_name=f"Audit_{selected_code}.html", mime="text/html")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-# ==============================================================================
-# VIEW 3: UNIVERSAL PAPER TRADING & AI LEDGER (+ FEATURE 2: REBALANCER)
+# MODULE 4: UNIVERSAL PAPER TRADING & AI LEDGER (+ REBALANCER)
 # ==============================================================================
 elif app_mode == "💼 Universal Paper Trading & AI Ledger":
     st.title("💼 Universal Paper Trading & AI Risk Ledger")
@@ -444,7 +429,6 @@ elif app_mode == "💼 Universal Paper Trading & AI Ledger":
         if asset_class.startswith("Stocks"):
             trade_target_name = st.selectbox("Select Stock:", ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"])
             trade_price = st.number_input("Execution Price (₹):", value=2500.0, step=10.0)
-            trade_code = trade_target_name
             sample_p = 0.12
         else:
             trade_scheme_label = st.selectbox("Select Mutual Fund Scheme:", list(ACTIVE_BENCHMARK_FUNDS.keys()))
@@ -489,11 +473,10 @@ elif app_mode == "💼 Universal Paper Trading & AI Ledger":
         df_ledger = pd.DataFrame(st.session_state.portfolio)
         st.dataframe(df_ledger, use_container_width=True)
         
-        # FEATURE 2: Automated AI Rebalancer
         if st.button("⚖️ Run AI Portfolio Risk Rebalancer", type="primary"):
             st.markdown("#### 🤖 Rebalancing Audit & Recommendations:")
             flagged_count = 0
-            for i, pos in enumerate(st.session_state.portfolio):
+            for pos in st.session_state.portfolio:
                 risk_val = float(pos['ai_risk_pct'].replace('%', ''))
                 if risk_val >= 50.0:
                     flagged_count += 1
@@ -509,7 +492,7 @@ elif app_mode == "💼 Universal Paper Trading & AI Ledger":
             st.rerun()
 
 # ==============================================================================
-# VIEW 4: MONTE CARLO PORTFOLIO VaR SIMULATOR (+ FEATURE 3)
+# MODULE 5: MONTE CARLO VaR SIMULATOR
 # ==============================================================================
 elif app_mode == "📊 Monte Carlo Portfolio VaR Simulator":
     st.title("📊 Monte Carlo 30-Day Value-at-Risk (VaR) Simulator")
@@ -538,7 +521,7 @@ elif app_mode == "📊 Monte Carlo Portfolio VaR Simulator":
             st.plotly_chart(fig, use_container_width=True)
 
 # ==============================================================================
-# VIEW 5: HISTORICAL DATASET ARCHIVE
+# MODULE 6: HISTORICAL DATASET ARCHIVE
 # ==============================================================================
 else:
     st.title("📁 Historical Research Dataset (47,272 Records)")
