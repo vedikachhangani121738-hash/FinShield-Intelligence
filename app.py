@@ -8,7 +8,7 @@ import joblib
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & DUAL-TONE CSS
+# 1. PAGE CONFIGURATION & TIMES NEW ROMAN CSS
 # ==========================================
 st.set_page_config(
     page_title="FinShield Intelligence | Global Terminal", 
@@ -19,13 +19,42 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Global Typography: Times New Roman */
+    html, body, [data-testid="stAppViewContainer"], p, span, label, .stTextInput, .stSelectbox, .stNumberInput, div {
+        font-family: 'Times New Roman', Times, serif !important;
+    }
     [data-testid="stAppViewContainer"] { background-color: #F3F4F6; }
     [data-testid="stSidebar"] { background-color: #0A2540 !important; }
-    [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
-    h1, h2, h3 { color: #0A2540; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 700; }
-    .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input { border-radius: 8px; border: 2px solid #0A2540; font-weight: bold; }
-    .blue-card { background-color: #0A2540; color: #FFFFFF; padding: 1.5rem; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 1rem; border-left: 6px solid; }
-    .blue-card h3, .blue-card p { color: #FFFFFF !important; margin: 0; }
+    [data-testid="stSidebar"] * { color: #E2E8F0 !important; font-family: 'Times New Roman', Times, serif !important; }
+    
+    h1, h2, h3 { 
+        color: #0A2540; 
+        font-family: 'Times New Roman', Times, serif !important; 
+        font-weight: bold; 
+    }
+    
+    .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input { 
+        border-radius: 8px; 
+        border: 2px solid #0A2540; 
+        font-weight: bold; 
+        font-family: 'Times New Roman', Times, serif !important;
+    }
+    
+    .blue-card { 
+        background-color: #0A2540; 
+        color: #FFFFFF; 
+        padding: 1.5rem; 
+        border-radius: 12px; 
+        box-shadow: 0 10px 15px rgba(0,0,0,0.1); 
+        margin-bottom: 1rem; 
+        border-left: 6px solid; 
+        font-family: 'Times New Roman', Times, serif !important;
+    }
+    .blue-card h3, .blue-card p, .blue-card h2 { 
+        color: #FFFFFF !important; 
+        font-family: 'Times New Roman', Times, serif !important;
+        margin: 0; 
+    }
     .js-plotly-plot { margin: 0 auto; }
 </style>
 """, unsafe_allow_html=True)
@@ -102,12 +131,14 @@ mf_database = pd.DataFrame({
     'Risk Score': [65, 40, 35, 85, 72, 32, 34, 70, 36, 88, 80, 42]
 })
 
+popular_tickers = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "TATAMOTORS.NS", "AAPL", "GOOGL", "TSLA", "Custom Ticker..."]
+
 # ==========================================
 # 4. SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
-    st.markdown("<h2>🛡️ FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v3.9</p>", unsafe_allow_html=True)
+    st.markdown("<h2>🛡️️ FinShield Intelligence</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v4.0</p>", unsafe_allow_html=True)
     st.markdown("---")
     
     app_mode = st.radio(
@@ -122,21 +153,25 @@ with st.sidebar:
         ]
     )
     st.markdown("---")
-    st.caption("🟢 Universal yFinance Feed: **ACTIVE**")
+    st.caption("🟢 Universal yFinance Live Feed: **ACTIVE**")
 
 # ==========================================
-# 5. MODULE EXECUTIONS (ARTIFACT-FREE & LIVE)
+# 5. MODULE EXECUTIONS (DROPDOWN + LIVE + TIMES NEW ROMAN)
 # ==========================================
 
 # --- MODULE 1 ---
 if "1." in app_mode:
     st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search any live global stock ticker linked directly to real-time market feeds.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Select or search any live global asset ticker from the dropdown feed.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
-        raw_ticker = st.text_input("🔍 Search Any Live Global Ticker:", value="RELIANCE.NS", key="m1_search")
-        ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
+        selected_ticker_option = st.selectbox("🔍 Select or Search Asset Ticker:", popular_tickers, index=0, key="m1_dropdown")
+        if selected_ticker_option == "Custom Ticker...":
+            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m1_custom")
+            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
+        else:
+            ticker = selected_ticker_option
 
     df = fetch_live_data(ticker)
     
@@ -189,17 +224,21 @@ if "1." in app_mode:
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=10))
             st.plotly_chart(fig_gauge, use_container_width=True)
     else:
-        st.error(f"Unable to pull market data for symbol '{ticker}'.")
+        st.error(f"Unable to pull live market data for symbol '{ticker}'.")
 
 # --- MODULE 2 ---
 elif "2." in app_mode:
     st.markdown("<h1>📊 Technical Telemetry & Indicators</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts from live market feeds.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts from live feeds.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
-        raw_ticker = st.text_input("🔍 Search Ticker for Telemetry:", value="RELIANCE.NS", key="m2_search")
-        ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
+        selected_ticker_option = st.selectbox("🔍 Select or Search Ticker for Telemetry:", popular_tickers, index=0, key="m2_dropdown")
+        if selected_ticker_option == "Custom Ticker...":
+            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m2_custom")
+            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
+        else:
+            ticker = selected_ticker_option
 
     df_raw = fetch_live_data(ticker)
     if not df_raw.empty and len(df_raw) > 30:
@@ -238,11 +277,20 @@ elif "2." in app_mode:
 # --- MODULE 3: MUTUAL FUND RISK SCREENING & SEARCH ---
 elif "3." in app_mode:
     st.markdown("<h1>🛡️ Mutual Fund Risk Screening & Search Terminal</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search schemes instantly, filter by category, or look up live mutual fund/ETF tickers.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search schemes instantly, filter by category dropdown, or look up live mutual fund/ETF tickers.</p>", unsafe_allow_html=True)
     
     search_col1, search_col2 = st.columns([2, 1])
     with search_col1:
-        search_query = st.text_input("🔍 Search Fund Scheme by Name or Category:", value="", key="mf_search_bar")
+        fund_search_options = ["All Funds"] + list(mf_database['Fund Name'].unique()) + ["Custom Search..."]
+        selected_mf_dropdown = st.selectbox("🔍 Search or Select Fund Scheme:", fund_search_options, key="mf_dropdown_search")
+        
+        if selected_mf_dropdown == "Custom Search...":
+            search_query = st.text_input("Enter Fund Name Keyword:", value="", key="mf_custom_search")
+        elif selected_mf_dropdown != "All Funds":
+            search_query = selected_mf_dropdown
+        else:
+            search_query = ""
+
     with search_col2:
         category_filter = st.selectbox("Filter by Category", ["All Categories"] + list(mf_database['Category'].unique()), key="mf_cat_filter")
         
@@ -255,7 +303,7 @@ elif "3." in app_mode:
     if category_filter != "All Categories":
         filtered_df = filtered_df[filtered_df['Category'] == category_filter]
         
-    # UI Upgrade: Distinguishable summary metrics for Mutual Funds
+    # UI Summary Cards
     if not filtered_df.empty:
         top_fund = filtered_df.loc[filtered_df['1Y Return (%)'].idxmax()]
         avg_return = filtered_df['1Y Return (%)'].mean()
@@ -271,7 +319,13 @@ elif "3." in app_mode:
     st.dataframe(filtered_df, hide_index=True, use_container_width=True)
     
     with st.expander("🌐 Lookup Live Custom Mutual Fund / ETF Ticker (yfinance)"):
-        custom_mf_ticker = st.text_input("Enter ETF or Fund Ticker (e.g. NIFTYBEES.NS, SETFNN50.NS):", value="NIFTYBEES.NS", key="custom_mf")
+        custom_mf_options = ["NIFTYBEES.NS", "SETFNN50.NS", "JUNIORBEES.NS", "BANKBEES.NS", "Custom Ticker..."]
+        selected_mf_ticker_opt = st.selectbox("Select ETF/Fund Ticker:", custom_mf_options, key="custom_mf_dropdown")
+        if selected_mf_ticker_opt == "Custom Ticker...":
+            custom_mf_ticker = st.text_input("Enter Ticker Symbol:", value="NIFTYBEES.NS", key="custom_mf_input")
+        else:
+            custom_mf_ticker = selected_mf_ticker_opt
+
         if st.button("Fetch Live Scheme Data"):
             mf_live_df = fetch_live_data(custom_mf_ticker)
             if not mf_live_df.empty:
@@ -298,7 +352,7 @@ elif "3." in app_mode:
 # --- MODULE 4: HEAD-TO-HEAD COMPARISON ---
 elif "4." in app_mode:
     st.markdown("<h1>⚔️ Head-to-Head (H2H) Fund & Scheme Comparison</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Select any two mutual fund schemes from the database for direct comparative analysis.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Select any two mutual fund schemes from the dropdown menu for direct comparative analysis.</p>", unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     fund1_name = c1.selectbox("Select Fund Scheme A", mf_database['Fund Name'], index=0, key="h2h_f1")
@@ -325,7 +379,7 @@ elif "4." in app_mode:
 # --- MODULE 5 ---
 elif "5." in app_mode:
     st.markdown("<h1>🗂️ Portfolio Overlap & Asset Allocation Analysis</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and cross-asset correlations.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and cross-asset allocations.</p>", unsafe_allow_html=True)
     
     col_alloc, col_donut = st.columns([1.5, 1.2])
     
@@ -350,7 +404,7 @@ elif "5." in app_mode:
 # --- MODULE 6: PAPER TRADING & AI LEDGER ---
 elif "6." in app_mode:
     st.markdown("<h1>📋 Paper Trading & AI Ledger</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking and live price execution.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking and dropdown asset selection.</p>", unsafe_allow_html=True)
     
     st.markdown(f"""
     <div class="blue-card" style="border-left-color: #00E676;">
@@ -363,7 +417,12 @@ elif "6." in app_mode:
     
     with col_trade:
         st.markdown("### Execute Simulation Order")
-        trade_ticker = st.text_input("Asset Ticker", value="RELIANCE.NS", key="trade_ticker").strip().upper()
+        selected_trade_opt = st.selectbox("Select Asset Ticker", popular_tickers, index=0, key="trade_dropdown")
+        if selected_trade_opt == "Custom Ticker...":
+            trade_ticker = st.text_input("Enter Ticker Symbol:", value="RELIANCE.NS", key="trade_custom").strip().upper()
+        else:
+            trade_ticker = selected_trade_opt
+
         trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
         shares = st.number_input("Quantity", min_value=1, max_value=10000, value=10)
         
