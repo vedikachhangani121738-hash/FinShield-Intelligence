@@ -215,14 +215,12 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     
-    # Extract robust indicators from df for deep insights
     returns = df['Close'].pct_change().dropna() if 'Close' in df else pd.Series([0])
     annual_vol = float(returns.std() * np.sqrt(252) * 100)
     rsi_val = float(df['RSI'].iloc[-1]) if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0
     sma20 = float(df['SMA_20'].iloc[-1]) if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else ltp
     trend_status = "BULLISH (Price > 20 SMA)" if ltp > sma20 else "BEARISH (Price < 20 SMA)"
     
-    # Header Banner
     c.setFillColorRGB(0.04, 0.15, 0.25)
     c.rect(0, height - 90, width, 90, fill=1, stroke=0)
     c.setFillColorRGB(1, 1, 1)
@@ -232,7 +230,6 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
     c.drawString(40, height - 58, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Target Asset: {ticker}")
     c.drawString(40, height - 74, "Classification: CONFIDENTIAL - Quantitative Institutional Telemetry")
     
-    # Section 1: Executive Valuation Summary
     c.setFillColorRGB(0.1, 0.1, 0.1)
     c.setFont("Helvetica-Bold", 13)
     c.drawString(40, height - 120, "1. Executive Asset Valuation & Crash Probability")
@@ -246,7 +243,6 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
     risk_status = "SAFE (LOW DISTRESS PROBABILITY)" if risk_score < 30 else "DANGER (HIGH DISTRESS PROBABILITY)"
     c.drawString(50, y_pos, f"• Risk Classification Status: {risk_status}")
     
-    # Section 2: Quantitative Telemetry & Momentum
     y_pos -= 40
     c.setFont("Helvetica-Bold", 13)
     c.drawString(40, y_pos, "2. Quantitative Telemetry & Market Momentum")
@@ -259,7 +255,6 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
     y_pos -= 20
     c.drawString(50, y_pos, f"• Technical Trend Structure: {trend_status}")
     
-    # Section 3: Institutional Recommendation & Risk Action
     y_pos -= 40
     c.setFont("Helvetica-Bold", 13)
     c.drawString(40, y_pos, "3. Institutional Risk Management Recommendation")
@@ -285,7 +280,6 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
         y_pos -= 15
         c.drawString(50, y_pos, "Recommended action: Reduce portfolio weight, lock in profits, or migrate capital to liquid cash.")
 
-    # Footer Disclaimer
     c.setStrokeColorRGB(0.8, 0.8, 0.8)
     c.line(40, 60, width - 40, 60)
     c.setFont("Helvetica-Oblique", 8)
@@ -344,23 +338,8 @@ def render_news_feed(ticker_symbol):
     except Exception:
         st.info("Live news stream temporarily unavailable for this asset symbol.")
 
-def smart_ticker_selector(key_prefix):
-    popular_defaults = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "AAPL", "GOOGL", "TSLA", "NVDA", "BTC-USD"]
-    search_input = st.text_input("🔍 Type Any Stock Name or Ticker (e.g., Tata, Apple, Reliance, Microsoft):", value="", key=f"{key_prefix}_search")
-    
-    if search_input and len(search_input.strip()) >= 2:
-        suggestions = get_ticker_suggestions(search_input)
-        if suggestions:
-            chosen = st.selectbox("Select exact matched asset from yFinance:", suggestions, key=f"{key_prefix}_choice")
-            return chosen.split(" | ")[0].strip()
-        else:
-            return search_input.strip().upper()
-    else:
-        chosen_pop = st.selectbox("Or select from popular institutional assets:", popular_defaults, key=f"{key_prefix}_pop")
-        return chosen_pop
-
 # ==========================================
-# 4. SIDEBAR NAVIGATION
+# 4. SIDEBAR NAVIGATION & GLOBAL TICKER STATE
 # ==========================================
 with st.sidebar:
     st.markdown("<h2>🛡 FinShield Intelligence</h2>", unsafe_allow_html=True)
@@ -378,6 +357,29 @@ with st.sidebar:
         ]
     )
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+    
+    # --- GLOBAL TICKER CONTROL ---
+    st.markdown("### 🌐 Global Target Asset")
+    if "global_ticker" not in st.session_state:
+        st.session_state.global_ticker = "RELIANCE.NS"
+        
+    popular_defaults = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "AAPL", "GOOGL", "TSLA", "NVDA", "BTC-USD"]
+    search_input = st.text_input("🔍 Search Ticker / Company:", value="", key="sidebar_search_input", placeholder="e.g. Tata, Apple, AAPL")
+    
+    if search_input and len(search_input.strip()) >= 2:
+        suggestions = get_ticker_suggestions(search_input)
+        if suggestions:
+            chosen = st.selectbox("Select matched asset:", suggestions, key="sidebar_choice")
+            st.session_state.global_ticker = chosen.split(" | ")[0].strip()
+        else:
+            st.session_state.global_ticker = search_input.strip().upper()
+    else:
+        chosen_pop = st.selectbox("Or choose popular asset:", popular_defaults, key="sidebar_pop")
+        if not search_input:
+            st.session_state.global_ticker = chosen_pop
+            
+    st.markdown(f"<p style='font-size:0.85rem; color:#00E676; margin-top:5px;'>Active Ticker: <b>{st.session_state.global_ticker}</b></p>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
     st.markdown("<p style='font-size:0.8rem; color:#94A3B8;'>🟢 Universal yFinance Search: <b style='color:#00E676;'>ACTIVE</b></p>", unsafe_allow_html=True)
 
 # ==========================================
@@ -387,9 +389,9 @@ with st.sidebar:
 # --- MODULE 1: STOCK CRASH-RISK PREDICTOR ---
 if "1." in app_mode:
     st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any company name or stock symbol globally to run institutional crash risk intelligence.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748B; margin-bottom:1.5rem;'>Analyzing active global asset: <b>{st.session_state.global_ticker}</b>. Use the sidebar to switch tickers instantly across modules.</p>", unsafe_allow_html=True)
     
-    ticker = smart_ticker_selector("m1")
+    ticker = st.session_state.global_ticker
     df_raw = fetch_live_data(ticker)
     
     if not df_raw.empty and len(df_raw) > 5:
@@ -416,7 +418,6 @@ if "1." in app_mode:
             </div>
             """, unsafe_allow_html=True)
             
-            # Pass df into the upgraded PDF generator
             pdf_buffer = generate_pdf_report(ticker, risk_score, ltp, change_pct, df)
             st.download_button(
                 label="📥 Download Executive PDF Report",
@@ -463,9 +464,9 @@ if "1." in app_mode:
 # --- MODULE 2: TECHNICAL TELEMETRY ---
 elif "2." in app_mode:
     st.markdown("<h1>📊 Technical Telemetry & Momentum Health</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any global stock to inspect interactive moving averages, RSI momentum, and MACD divergence telemetry.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748B; margin-bottom:1.5rem;'>Inspecting technical indicators for active global asset: <b>{st.session_state.global_ticker}</b>.</p>", unsafe_allow_html=True)
     
-    ticker = smart_ticker_selector("m2")
+    ticker = st.session_state.global_ticker
     df_raw = fetch_live_data(ticker)
     
     if not df_raw.empty and len(df_raw) > 30:
@@ -515,9 +516,9 @@ elif "2." in app_mode:
 # --- MODULE 3: HISTORICAL STRATEGY BACKTESTER ---
 elif "3." in app_mode:
     st.markdown("<h1>🧪 Historical Strategy Backtester</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Search any stock to simulate rule-based risk mitigation strategies over historical 1-year price action.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748B; margin-bottom:1.5rem;'>Backtesting risk mitigation strategies on active global asset: <b>{st.session_state.global_ticker}</b>.</p>", unsafe_allow_html=True)
     
-    ticker = smart_ticker_selector("m3")
+    ticker = st.session_state.global_ticker
     df_raw = fetch_live_data(ticker)
     
     if not df_raw.empty and len(df_raw) > 50:
@@ -607,7 +608,7 @@ elif "4." in app_mode:
 # --- MODULE 5: PAPER TRADING & PERSISTENT SQLITE LEDGER ---
 elif "5." in app_mode:
     st.markdown("<h1>📋 Paper Trading & Persistent AI Ledger</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; margin-bottom:1.5rem;'>Simulate institutional trade execution backed by persistent SQLite database storage.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748B; margin-bottom:1.5rem;'>Simulate institutional trade execution for active global asset: <b>{st.session_state.global_ticker}</b> backed by persistent SQLite database storage.</p>", unsafe_allow_html=True)
     
     current_cash = get_cash_balance()
     st.markdown(f"""
@@ -622,7 +623,9 @@ elif "5." in app_mode:
     with col_trade:
         st.markdown('<div class="fin-card">', unsafe_allow_html=True)
         st.markdown("### Execute Simulation Order")
-        trade_ticker = smart_ticker_selector("trade")
+        trade_ticker = st.session_state.global_ticker
+        st.info(f"Trading Asset: **{trade_ticker}** (Synced from Global Sidebar)")
+        
         trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
         shares = st.number_input("Quantity", min_value=1, max_value=10000, value=10)
         
