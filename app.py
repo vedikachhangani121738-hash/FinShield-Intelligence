@@ -15,6 +15,19 @@ st.set_page_config(
 )
 
 # Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
+
+st.markdown("""
+    <style>
+    @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .risk-badge-critical {
+        animation: pulse-red 2s infinite;
+    }
+    </style>
+""", unsafe_allow_html=True)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
