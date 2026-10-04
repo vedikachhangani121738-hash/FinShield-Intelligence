@@ -1,9 +1,10 @@
 streamlit
 pandas
 numpy
-joblib
-scikit-learn
-openpyxl
-yfinance
 plotly
+yfinance
+joblib
+shap
+matplotlib
+reportlab
 mftool
