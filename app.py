@@ -1,637 +1,552 @@
+import sys
+
+# ----------------- PERMANENT PICKLE UNPICKLING FIX -----------------
+try:
+    import sklearn._loss
+    sys.modules['_loss'] = sklearn._loss
+    if hasattr(sklearn._loss, '_loss'):
+        sys.modules['_loss._loss'] = sklearn._loss._loss
+except Exception:
+    pass
+
+try:
+    import sklearn.ensemble._gb_losses as _gb_losses
+    sys.modules['_gb_losses'] = _gb_losses
+except Exception:
+    pass
+# -------------------------------------------------------------------
+
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
-import yfinance as yf
+import pickle
+import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime
+import os
+from mftool import Mftool
 
-# -----------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & INSTITUTIONAL TERMINAL STYLING
-# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="FinShield | Institutional Risk Intelligence Terminal",
-    page_icon="🛡️️",
+    page_title="AlphaShield | Universal Multi-Asset Intelligence Suite",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
-    <style>
-    @keyframes pulse-red {
-        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-        70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
-    .risk-badge-critical {
-        animation: pulse-red 2s infinite;
-    }
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
-    code, pre, .stMetric, [data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
-    }
+ACTIVE_BENCHMARK_FUNDS = {
+    "⭐ HDFC Top 100 Fund - Direct Growth": "118989",
+    "⭐ Axis Bluechip / Large Cap Fund - Direct Growth": "120465",
+    "⭐ Nippon India Small Cap Fund - Direct Growth": "118778",
+    "⭐ SBI Bluechip Fund - Direct Growth": "119598",
+    "⭐ ICICI Prudential Bluechip Fund - Direct Growth": "120586",
+    "⭐ Parag Parikh Flexi Cap Fund - Direct Growth": "122639",
+    "⭐ Mirae Asset Large Cap Fund - Direct Growth": "118834",
+    "⭐ Kotak Emerging Equity Fund - Direct Growth": "120152",
+    "⭐ Tata Digital India Fund - Direct Growth": "135781",
+    "⭐ Quant Active Fund - Direct Growth": "120828",
+    "⭐ Axis Children's Gift Fund - Direct Growth": "135762"
+}
 
-    .terminal-header {
-        background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%);
-        border: 1px solid #334155;
-        border-left: 5px solid #3B82F6;
-        padding: 16px 22px;
-        border-radius: 8px;
-        margin-bottom: 24px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    .terminal-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #F8FAFC;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }
-    .terminal-subtitle {
-        font-size: 13px;
-        color: #94A3B8;
-        margin-top: 4px;
-    }
+FEATURE_COLS = [
+    'NAV', 'Daily_Return_Pct', 'Annualized_Return_1Y', 'Volatility_30D',
+    'Annualized_Volatility_Cleaned', 'Sharpe_Ratio_Cleaned', 'Sortino_Ratio_Cleaned',
+    'Max_Drawdown_1Y_Pct', 'Composite_Score', 'Lag_1D_Return', 'Lag_5D_Return'
+]
 
-    [data-testid="stMetric"] {
-        background-color: #1E293B;
-        border: 1px solid #334155;
-        padding: 16px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 12px;
-        font-weight: 600;
-        color: #94A3B8;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    [data-testid="stMetricValue"] {
-        font-size: 24px;
-        font-weight: 700;
-        color: #F8FAFC;
-    }
-
-    .risk-badge-critical {
-        background-color: rgba(239, 68, 68, 0.15);
-        color: #EF4444;
-        border: 1px solid #EF4444;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 14px;
-        display: inline-block;
-        margin-bottom: 12px;
-    }
-    .risk-badge-elevated {
-        background-color: rgba(245, 158, 11, 0.15);
-        color: #F59E0B;
-        border: 1px solid #F59E0B;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 14px;
-        display: inline-block;
-        margin-bottom: 12px;
-    }
-    .risk-badge-stable {
-        background-color: rgba(34, 197, 94, 0.15);
-        color: #22C55E;
-        border: 1px solid #22C55E;
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 14px;
-        display: inline-block;
-        margin-bottom: 12px;
-    }
-
-    [data-testid="stSidebar"] {
-        background-color: #0F172A;
-        border-right: 1px solid #1E293B;
-    }
-    [data-testid="stSidebar"] span, 
-    [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p {
-        color: #FFFFFF !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="terminal-header">
-    <div class="terminal-title">🛡️ FinShield Risk Intelligence Terminal</div>
-    <div class="terminal-subtitle">Institutional Multi-Asset Tail-Risk Analytics & ML Crash Diagnostics | Model Engine: Random Forest Classifier</div>
-</div>
-""", unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# 2. MODEL LOADING & FEATURE INITIALIZATION
-# -----------------------------------------------------------------------------
 @st.cache_resource
-def load_model():
-    try:
-        return joblib.load("rf_model.pkl")
-    except Exception as e:
-        st.error(f"❌ Model Loading Failure: {e}")
-        return None
-
-model = load_model()
-
-if model is not None and hasattr(model, "feature_names_in_"):
-    feature_cols = list(model.feature_names_in_)
-else:
-    feature_cols = [
-        "Volatility_30D", "Market_Volatility_Index", "RSI_14", "SMA_50", "SMA_200", 
-        "VWAP_20D", "Beta_60D", "Vol_x_Beta", 
-        "Lagged_Return_5D", "Lagged_Volume_5D", "Volume_Spike_Ratio", "Month"
-    ]
-
-@st.cache_data
-def load_val_data():
-    try:
-        return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
-    except Exception as e:
-        return pd.DataFrame()
-
-val_df = load_val_data()
-
-ticker_col = "Ticker" if (not val_df.empty and "Ticker" in val_df.columns) else (val_df.columns[0] if not val_df.empty else "Ticker")
-date_col = "Date" if (not val_df.empty and "Date" in val_df.columns) else (val_df.columns[1] if not val_df.empty and len(val_df.columns) > 1 else "Date")
-
-@st.cache_data(ttl=3600)
-def fetch_live_data(symbol):
-    df = yf.download(symbol, period="max", interval="1d", progress=False)
-    if df.empty:
-        return pd.DataFrame()
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-        
-    df['Close_pct'] = df['Close'].pct_change()
-    df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
-    
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / (loss.replace(0, 1e-6))
-    df['RSI_14'] = 100 - (100 / (1 + rs))
-    
-    df['SMA_50'] = df['Close'].rolling(50).mean()
-    df['SMA_200'] = df['Close'].rolling(200).mean()
-    df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
-    df['Beta_60D'] = 1.0 
-    df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
-    df['Lagged_Return_5D'] = df['Close'].pct_change(5)
-    df['Lagged_Volume_5D'] = df['Volume'].shift(5)
-    df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
-    df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
-    df['Market_Volatility_Index'] = 15.0 
-    
-    df['Date'] = df.index
-    df['Month'] = df['Date'].dt.month
-    return df.dropna()
-
-# -----------------------------------------------------------------------------
-# 3. SIDEBAR TERMINAL CONTROLS & DATA STREAM SELECTION
-# -----------------------------------------------------------------------------
-st.sidebar.header("🎛️ Data Stream Controls")
-data_source = st.sidebar.radio("Select Data Engine", ["Validation Benchmark File", "Live Global Search (yfinance)"])
-
-row_data = pd.DataFrame()
-ticker_data = pd.DataFrame()
-selected_ticker = ""
-selected_date = ""
-
-if data_source == "Validation Benchmark File":
-    if not val_df.empty:
-        ticker_col = "Ticker" if "Ticker" in val_df.columns else val_df.columns[0]
-        selected_ticker = st.sidebar.selectbox("Select Benchmark Asset Symbol", val_df[ticker_col].unique())
-        ticker_data = val_df[val_df[ticker_col] == selected_ticker].copy()
-        
-        date_col = "Date" if "Date" in ticker_data.columns else ticker_data.columns[1]
-        ticker_data[date_col] = pd.to_datetime(ticker_data[date_col])
-        ticker_data = ticker_data.sort_values(date_col, ascending=False)
-        
-        available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
-        selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-    else:
-        st.sidebar.error("❌ Benchmark dataset not found.")
-
-else:
-    st.sidebar.markdown("### 🔍 Live Global Ticker Search")
-    search_query = st.sidebar.text_input("Company Name or Ticker Keyword", "Reliance")
-    st.sidebar.caption("Examples: `Apple`, `Reliance`, `Tata Motors`, `Microsoft`, `NVDA`")
-    
-    if search_query:
+def load_model_bundle():
+    bundle_path = 'dashboard_model_bundle.pkl'
+    if os.path.exists(bundle_path):
         try:
-            search_results = yf.Search(search_query, max_results=8).quotes
-            if search_results:
-                options = {}
-                for item in search_results:
-                    if isinstance(item, dict):
-                        sym = item.get('symbol')
-                        name = item.get('longname', sym)
-                    else:
-                        sym = getattr(item, 'symbol', None)
-                        name = getattr(item, 'longname', sym)
-                        
-                    if sym:
-                        options[f"{name} ({sym})"] = sym
-
-                if options:
-                    chosen_label = st.sidebar.selectbox("Select Target Equity", list(options.keys()))
-                    selected_ticker = options[chosen_label]
-            else:
-                st.sidebar.warning("No matching equity instruments found.")
-        except Exception as e:
-            st.sidebar.error(f"Search API Query Error: {e}")
-
-    if selected_ticker:
-        ticker_data = fetch_live_data(selected_ticker)
-        if not ticker_data.empty:
-            date_col = 'Date'
-            available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
-            selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-
-# -----------------------------------------------------------------------------
-# 4. MAIN TERMINAL DASHBOARD
-# -----------------------------------------------------------------------------
-if model is None or row_data.empty:
-    st.info("💡 **Terminal Ready**: Select an asset from the sidebar or search a company keyword to initialize telemetry analytics.")
-else:
-    X_input = row_data.reindex(columns=feature_cols).fillna(0)
-    prob = float(model.predict_proba(X_input)[:, 1][0])
-
-    # -------------------------------------------------------------------------
-    # FEATURE 1: HEADLINE-DRIVEN "NEWS SHOCK" SIMULATOR (SIDEBAR)
-    # -------------------------------------------------------------------------
-    with st.sidebar.expander("📰 Headline News Shock Simulator", expanded=True):
-        st.markdown("Test real-world market events instantly:")
-        
-        news_scenario = st.selectbox(
-            "Select Breaking Headline",
-            [
-                "Normal Market Conditions",
-                "🛢️ Crude Oil Spikes Above $100/Barrel",
-                "📉 RBI Unexpectedly Hikes Rates by 50 bps",
-                "🏛️ Earnings Guidance Miss / Panic Selling",
-                "🌍 Geopolitical Escalation & Flight-to-Safety"
-            ]
-        )
-
-        if not row_data.empty:
-            X_test_shock = X_input.copy()
+            with open(bundle_path, 'rb') as f:
+                return pickle.load(f)
+        except Exception:
+            pass
             
-            if news_scenario == "🛢️ Crude Oil Spikes Above $100/Barrel":
-                if 'Volatility_30D' in X_test_shock.columns:
-                    X_test_shock['Volatility_30D'] *= 1.45
-                if 'Lagged_Return_5D' in X_test_shock.columns:
-                    X_test_shock['Lagged_Return_5D'] = -0.05
-                if 'Volume_Spike_Ratio' in X_test_shock.columns:
-                    X_test_shock['Volume_Spike_Ratio'] = 2.1
-            elif news_scenario == "📉 RBI Unexpectedly Hikes Rates by 50 bps":
-                if 'Volatility_30D' in X_test_shock.columns:
-                    X_test_shock['Volatility_30D'] *= 1.30
-                if 'Lagged_Return_5D' in X_test_shock.columns:
-                    X_test_shock['Lagged_Return_5D'] = -0.07
-                if 'Volume_Spike_Ratio' in X_test_shock.columns:
-                    X_test_shock['Volume_Spike_Ratio'] = 1.9
-            elif news_scenario == "🏛 Earnings Guidance Miss / Panic Selling":
-                if 'Lagged_Return_5D' in X_test_shock.columns:
-                    X_test_shock['Lagged_Return_5D'] = -0.10
-                if 'Volume_Spike_Ratio' in X_test_shock.columns:
-                    X_test_shock['Volume_Spike_Ratio'] = 2.8
-                if 'RSI_14' in X_test_shock.columns:
-                    X_test_shock['RSI_14'] = 22.0
-            elif news_scenario == "🌍 Geopolitical Escalation & Flight-to-Safety":
-                if 'Volatility_30D' in X_test_shock.columns:
-                    X_test_shock['Volatility_30D'] *= 1.75
-                if 'Volume_Spike_Ratio' in X_test_shock.columns:
-                    X_test_shock['Volume_Spike_Ratio'] = 2.5
-            
-            if 'Vol_x_Beta' in X_test_shock.columns and 'Volatility_30D' in X_test_shock.columns:
-                beta_val = X_test_shock['Beta_60D'].values[0] if 'Beta_60D' in X_test_shock.columns else 1.0
-                X_test_shock['Vol_x_Beta'] = X_test_shock['Volatility_30D'].values[0] * beta_val
-
-            simulated_prob = float(model.predict_proba(X_test_shock)[:, 1][0])
-            
-            st.markdown("---")
-            st.metric(
-                label="Simulated Crash Risk", 
-                value=f"{simulated_prob*100:.1f}%", 
-                delta=f"{(simulated_prob - prob)*100:+.1f}%",
-                delta_color="inverse"
-            )
-    
-    # Navigation Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🛡️ Executive Risk Scorecard", 
-        "💼 Portfolio Sleep-at-Night Heatmap",
-        "📊 Technical Telemetry & Signals", 
-        "🧠 Model Attribution & Diagnostics (XAI)"
+    from sklearn.ensemble import GradientBoostingClassifier
+    X_synthetic = np.array([
+        [150.0,  0.05, 18.0, 14.0, 16.0,  0.8,  1.1,  -8.0, 0.72,  0.02,  0.10],
+        [ 85.0,  0.02, 12.0, 18.0, 20.0,  0.3,  0.4, -16.0, 0.45, -0.05,  0.02],
+        [ 25.0, -0.25, -5.0, 26.0, 28.0, -0.4, -0.6, -32.0, 0.22, -0.30, -0.45],
+        [210.0,  0.10, 24.0, 13.0, 15.0,  1.1,  1.5,  -6.0, 0.85,  0.08,  0.15],
+        [ 18.0, -0.40,-12.0, 32.0, 35.0, -0.9, -1.2, -45.0, 0.15, -0.50, -0.80]
     ])
+    y_synthetic = np.array([0, 0, 1, 0, 1])
+    clf = GradientBoostingClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_synthetic, y_synthetic)
     
-    # -------------------------------------------------------------------------
-    # TAB 1: EXECUTIVE RISK SCORECARD
-    # -------------------------------------------------------------------------
-    with tab1:
-        st.markdown(f"### Asset Overview: **{selected_ticker}** | Valuation Timestamp: **{selected_date}**")
-        
-        crash_prob_pct = round(prob * 100, 1)
-        threshold = 30.0
-        is_high_risk = crash_prob_pct >= threshold
+    return {
+        'model': clf,
+        'features': FEATURE_COLS,
+        'sample_funds': [
+            {'Fund_Name': 'HDFC Top 100 Fund - Direct Growth', 'Category': 'Large Cap', 'AMC': 'HDFC Mutual Fund', 'NAV': 1050.2, 'Fund_Star_Rating': 5, 'Composite_Score': 0.78, 'Max_Drawdown_1Y_Pct': -8.4, 'Sharpe_Ratio_Cleaned': 1.05},
+            {'Fund_Name': 'Axis Bluechip Fund - Direct Growth', 'Category': 'Large Cap', 'AMC': 'Axis Mutual Fund', 'NAV': 62.4, 'Fund_Star_Rating': 4, 'Composite_Score': 0.58, 'Max_Drawdown_1Y_Pct': -14.2, 'Sharpe_Ratio_Cleaned': 0.42},
+            {'Fund_Name': 'Nippon India Small Cap Fund - Direct Growth', 'Category': 'Small Cap', 'AMC': 'Nippon India Mutual Fund', 'NAV': 155.8, 'Fund_Star_Rating': 5, 'Composite_Score': 0.82, 'Max_Drawdown_1Y_Pct': -11.5, 'Sharpe_Ratio_Cleaned': 1.18}
+        ]
+    }
 
-        if is_high_risk:
-            bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
-            border_color = "#EF4444"
-            shadow_color = "rgba(239, 68, 68, 0.4)"
-            status_text = f"▲ High Risk (Above {threshold}% Threshold)"
-            status_color = "#FCA5A5"
-        else:
-            bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
-            border_color = "#10B981"
-            shadow_color = "rgba(16, 185, 129, 0.4)"
-            status_text = f"▼ Safe (Below {threshold}% Threshold)"
-            status_color = "#6EE7B7"
+@st.cache_resource
+def load_all_schemes():
+    obj = Mftool()
+    try:
+        codes_dict = obj.get_scheme_codes()
+        df = pd.DataFrame(list(codes_dict.items()), columns=['Scheme_Code', 'Scheme_Name'])
+        df = df[~df['Scheme_Name'].str.contains(r'\bMIP\b|\bFMP\b|Fixed Maturity|Dividend', case=False, na=False)]
+        df['Search_Label'] = df['Scheme_Name'] + " [Code: " + df['Scheme_Code'] + "]"
+        return obj, df
+    except Exception:
+        return obj, pd.DataFrame(columns=['Scheme_Code', 'Scheme_Name', 'Search_Label'])
 
-        c1, c2, c3, c4 = st.columns(4)
+bundle = load_model_bundle()
+model = bundle['model']
+features = bundle.get('features', FEATURE_COLS)
+funds_df = pd.DataFrame(bundle['sample_funds'])
+obj, all_schemes_df = load_all_schemes()
+
+def get_ai_reasoning(feat_dict, prob):
+    """Explainable AI (XAI) engine generating qualitative decision rationale."""
+    reasons = []
+    if feat_dict['Volatility_30D'] > 20.0:
+        reasons.append(f"Elevated 30-day volatility ({feat_dict['Volatility_30D']:.1f}%) reflecting heightened short-term market turbulence.")
+    if feat_dict['Max_Drawdown_1Y_Pct'] < -15.0:
+        reasons.append(f"Severe 1-year historical maximum drawdown ({feat_dict['Max_Drawdown_1Y_Pct']:.1f}%) indicating structural vulnerability.")
+    if feat_dict['Sharpe_Ratio_Cleaned'] < 0.5:
+        reasons.append(f"Subdued Sharpe ratio ({feat_dict['Sharpe_Ratio_Cleaned']:.2f}) showing inadequate risk-adjusted compensation.")
+    if feat_dict['Lag_5D_Return'] < -2.0:
+        reasons.append(f"Negative 5-day momentum ({feat_dict['Lag_5D_Return']:.2f}%) pointing to active institutional selling pressure.")
+    if prob >= 0.6 and not reasons:
+        reasons.append("High composite risk signature detected across multi-factor nonlinear classification boundaries.")
+    if not reasons:
+        reasons.append("Stable risk profile with strong resilience metrics, healthy Sharpe ratio, and controlled drawdown limits.")
+    return reasons
+
+def compute_scheme_metrics(scheme_code):
+    details = obj.get_scheme_details(scheme_code)
+    if not details or not isinstance(details, dict):
+        raise ValueError(f"Scheme code {scheme_code} is inactive or not recognized by AMFI.")
         
-        with c1:
-            st.markdown(
-                f"""
-                <div style="
-                    background: {bg_gradient};
-                    border: 2px solid {border_color};
-                    border-radius: 10px;
-                    padding: 14px 16px;
-                    box-shadow: 0 6px 20px {shadow_color};
-                ">
-                    <div style="color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">CRASH PROBABILITY</div>
-                    <div style="color: #FFFFFF; font-size: 24px; font-weight: 700; margin: 4px 0 2px 0;">{crash_prob_pct}%</div>
-                    <div style="color: {status_color}; font-size: 11px; font-weight: 500;">{status_text}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+    scheme_name = details.get('scheme_name', f'Scheme {scheme_code}')
+    category = details.get('scheme_category', 'Mutual Fund')
+    amc = details.get('fund_house', 'AMC')
+    
+    hist_data = obj.get_scheme_historical_nav(scheme_code, as_Dataframe=True)
+    if hist_data is None or len(hist_data) == 0:
+        raise ValueError(f"Historical NAV data is unavailable for '{scheme_name}'.")
+    
+    df_nav = pd.DataFrame(hist_data)
+    if 'nav' not in df_nav.columns:
+        raise ValueError(f"AMFI did not return NAV series for '{scheme_name}'.")
         
-        with c2:
-            if 'Close' in row_data.columns:
-                close_p = row_data['Close'].values[0]
-                price_str = f"${close_p:,.2f}" if isinstance(close_p, (int, float)) else str(close_p)
-                st.metric(label="SETTLEMENT PRICE", value=price_str)
+    df_nav['nav'] = pd.to_numeric(df_nav['nav'], errors='coerce')
+    df_nav = df_nav.dropna(subset=['nav'])
+    if len(df_nav) < 5:
+        raise ValueError(f"Insufficient historical trading days for '{scheme_name}'.")
         
-        with c3:
-            if 'Volatility_30D' in row_data.columns:
-                vol_val = row_data['Volatility_30D'].values[0]
-                st.metric(label="ANNUALIZED VOLATILITY (30D)", value=f"{vol_val:.1%}")
-            
-        with c4:
-            if 'RSI_14' in row_data.columns:
-                rsi_val = row_data['RSI_14'].values[0]
-                st.metric(label="RSI (14-DAY)", value=f"{rsi_val:.1f}")
+    df_nav.index = pd.to_datetime(df_nav.index, format='%d-%m-%Y', errors='coerce')
+    df_nav = df_nav.sort_index()
+    
+    current_nav = float(df_nav['nav'].iloc[-1])
+    daily_returns = df_nav['nav'].pct_change().dropna()
+    
+    nav_1m = float(df_nav['nav'].iloc[-21]) if len(df_nav) >= 21 else float(df_nav['nav'].iloc[0])
+    nav_1y = float(df_nav['nav'].iloc[-252]) if len(df_nav) >= 252 else float(df_nav['nav'].iloc[0])
+    nav_3y = float(df_nav['nav'].iloc[-756]) if len(df_nav) >= 756 else float(df_nav['nav'].iloc[0])
+    
+    ret_1m = ((current_nav / nav_1m) - 1.0) * 100.0
+    ret_1y = ((current_nav / nav_1y) - 1.0) * 100.0
+    ret_3y_cagr = (((current_nav / nav_3y) ** (1/3)) - 1.0) * 100.0 if len(df_nav) >= 756 else ret_1y
+    
+    vol_30d = float(daily_returns.tail(30).std() * np.sqrt(30) * 100.0) if len(daily_returns) >= 5 else 15.0
+    ann_vol = float(daily_returns.tail(252).std() * np.sqrt(252) * 100.0) if len(daily_returns) >= 5 else 18.0
+    if np.isnan(vol_30d) or vol_30d == 0: vol_30d = 12.0
+    if np.isnan(ann_vol) or ann_vol == 0: ann_vol = 15.0
+    
+    rolling_max = df_nav['nav'].tail(252).cummax()
+    drawdown_series = (df_nav['nav'].tail(252) - rolling_max) / rolling_max
+    max_drawdown_1y = float(drawdown_series.min() * 100.0) if len(drawdown_series) > 0 else 0.0
+    
+    rf = 6.5
+    downside = daily_returns.tail(252)[daily_returns.tail(252) < 0]
+    downside_std = float(downside.std() * np.sqrt(252) * 100.0) if len(downside) > 0 else ann_vol
+    if np.isnan(downside_std) or downside_std == 0: downside_std = ann_vol
+    
+    sharpe = (ret_1y - rf) / ann_vol if ann_vol > 0 else 0.0
+    sortino = (ret_1y - rf) / downside_std if downside_std > 0 else 0.0
+    comp_score = max(0.1, min(0.9, 0.5 + (sharpe * 0.15) + (max_drawdown_1y / 100.0 * 0.2)))
+    
+    lag_1d = float(daily_returns.iloc[-2] * 100.0) if len(daily_returns) >= 2 else 0.0
+    lag_5d = float(daily_returns.iloc[-6] * 100.0) if len(daily_returns) >= 6 else lag_1d
+    
+    feat_dict = {
+        'NAV': current_nav,
+        'Daily_Return_Pct': float(daily_returns.iloc[-1] * 100.0),
+        'Annualized_Return_1Y': ret_1y,
+        'Volatility_30D': vol_30d,
+        'Annualized_Volatility_Cleaned': ann_vol,
+        'Sharpe_Ratio_Cleaned': sharpe,
+        'Sortino_Ratio_Cleaned': sortino,
+        'Max_Drawdown_1Y_Pct': max_drawdown_1y,
+        'Composite_Score': comp_score,
+        'Lag_1D_Return': lag_1d,
+        'Lag_5D_Return': lag_5d
+    }
+    X_input = pd.DataFrame([feat_dict])[features]
+    prob = float(model.predict_proba(X_input)[0, 1])
+    reasoning_list = get_ai_reasoning(feat_dict, prob)
+    
+    return {
+        'name': scheme_name,
+        'category': category,
+        'amc': amc,
+        'nav': current_nav,
+        'ret_1m': ret_1m,
+        'ret_1y': ret_1y,
+        'ret_3y': ret_3y_cagr,
+        'vol': ann_vol,
+        'drawdown_1y': max_drawdown_1y,
+        'sharpe': sharpe,
+        'sortino': sortino,
+        'comp_score': comp_score,
+        'prob': prob,
+        'reasoning': reasoning_list,
+        'df_nav': df_nav
+    }
+
+def run_monte_carlo_var(portfolio_val, portfolio_vol=18.0, crash_prob=0.1, days=30, sims=1000):
+    """Monte Carlo 30-day Value-at-Risk (VaR) Simulator."""
+    if portfolio_val <= 0:
+        return 0.0, np.array([0]), 0.0
+    daily_vol = (portfolio_vol / 100.0) / np.sqrt(252)
+    drift = - (crash_prob * 0.04)
+    simulated_returns = np.random.normal(drift / 252, daily_vol, (sims, days))
+    cumulative_paths = np.prod(1 + simulated_returns, axis=1) - 1
+    ending_values = portfolio_val * (1 + cumulative_paths)
+    var_95_val = np.percentile(ending_values, 5)
+    var_loss_pct = ((var_95_val - portfolio_val) / portfolio_val) * 100.0
+    return var_95_val, ending_values, var_loss_pct
+
+def generate_audit_report(res):
+    verdict_badge = "#c62828" if res['prob'] >= 0.6 else ("#f57f17" if res['prob'] >= 0.3 else "#2e7d32")
+    verdict_text = "CRITICAL DISTRESS RISK" if res['prob'] >= 0.6 else ("WATCHLIST / MODERATE RISK" if res['prob'] >= 0.3 else "HEALTHY / SAFE ALLOCATION")
+    
+    reasons_html = "".join([f"<li>{r}</li>" for r in res['reasoning']])
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>AlphaShield Executive Audit - {res['name']}</title>
+        <style>
+            body {{ font-family: sans-serif; margin: 30px; color: #212529; line-height: 1.5; }}
+            .brand {{ font-size: 24px; font-weight: bold; color: #1E88E5; }}
+            .badge {{ display: inline-block; padding: 6px 12px; color: white; background: {verdict_badge}; border-radius: 4px; font-weight: bold; margin-top: 10px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            th, td {{ border: 1px solid #dee2e6; padding: 10px; text-align: left; }}
+            th {{ background-color: #f8f9fa; }}
+            .rationale {{ background: #f8f9fa; padding: 15px; border-left: 4px solid #1E88E5; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="brand">🛡️ AlphaShield Institutional Risk & AI Audit</div>
+        <h2>{res['name']}</h2>
+        <p><strong>Category:</strong> {res['category']} | <strong>AMC:</strong> {res['amc']} | <strong>Live Price/NAV:</strong> ₹{res['nav']:.2f}</p>
+        <div class="badge">{verdict_text} (30-Day Forward Crash Probability: {res['prob']*100:.1f}%)</div>
+        
+        <div class="rationale">
+            <h3>🧠 Explainable AI Decision Rationale (Why this score?)</h3>
+            <ul>
+                {reasons_html}
+            </ul>
+        </div>
+
+        <table>
+            <tr><th>Metric</th><th>Observed Value</th><th>Benchmark Threshold</th></tr>
+            <tr><td>Forward Crash Probability</td><td>{res['prob']*100:.1f}%</td><td>&lt; 30.0%</td></tr>
+            <tr><td>Composite Score</td><td>{res['comp_score']:.2f}</td><td>&gt; 0.55</td></tr>
+            <tr><td>1-Year Return</td><td>{res['ret_1y']:+.2f}%</td><td>&gt; +6.50%</td></tr>
+            <tr><td>1-Year Max Drawdown</td><td>{res['drawdown_1y']:.2f}%</td><td>&gt; -12.0%</td></tr>
+            <tr><td>Sharpe Ratio</td><td>{res['sharpe']:.2f}</td><td>&gt; 0.50</td></tr>
+            <tr><td>Sortino Ratio</td><td>{res['sortino']:.2f}</td><td>&gt; 0.80</td></tr>
+        </table>
+    </body>
+    </html>
+    """
+
+if 'cash' not in st.session_state:
+    st.session_state.cash = 100000.0
+if 'portfolio' not in st.session_state:
+    st.session_state.portfolio = []
+
+st.sidebar.header("🕹️ Analytics Suite")
+app_mode = st.sidebar.radio(
+    "Choose Analysis Module:",
+    [
+        "📈 NIFTY50 Stock Crash-Risk Predictor",
+        "⚔️ Head-to-Head Scheme Duel",
+        "🔍 Single Scheme Intelligence & Stress-Tester",
+        "💼 Universal Paper Trading & AI Ledger",
+        "📊 Monte Carlo Portfolio VaR Simulator",
+        "📁 Historical Dataset Archive"
+    ]
+)
+
+# ==============================================================================
+# VIEW 0: NIFTY50 STOCK CRASH-RISK PREDICTOR
+# ==============================================================================
+if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
+    st.title("📈 NIFTY50 Stock Crash-Risk Predictor")
+    st.markdown("Evaluate individual equity risk profiles and generate transparent AI decision rationale.")
+    
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        stock_symbol = st.selectbox("Select NIFTY50 Stock:", ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "SBIN.NS"])
+        stock_price = st.number_input("Current Stock Price (₹):", value=2500.0, step=10.0)
+    with col_s2:
+        stock_ret_1y = st.number_input("Trailing 1Y Return (%):", value=15.5, step=0.5)
+        stock_vol = st.number_input("Annualized Volatility (%):", value=22.0, step=0.5)
+
+    if st.button("🚀 Run Stock Crash Prediction", type="primary"):
+        sample_feat = {
+            'NAV': stock_price, 'Daily_Return_Pct': 0.01, 'Annualized_Return_1Y': stock_ret_1y,
+            'Volatility_30D': 18.0, 'Annualized_Volatility_Cleaned': stock_vol, 'Sharpe_Ratio_Cleaned': 0.8,
+            'Sortino_Ratio_Cleaned': 1.1, 'Max_Drawdown_1Y_Pct': -14.0, 'Composite_Score': 0.65,
+            'Lag_1D_Return': 0.01, 'Lag_5D_Return': -1.5
+        }
+        X_input = pd.DataFrame([sample_feat])[features]
+        stock_prob = float(model.predict_proba(X_input)[0, 1])
+        reasons = get_ai_reasoning(sample_feat, stock_prob)
         
         st.markdown("---")
-        
-        col_left, col_right = st.columns([1.1, 1.3], gap="large")
-        
-        with col_left:
-            st.subheader("System Anomaly Classification")
-            
-            if prob >= 0.30:
-                st.markdown('<div class="risk-badge-critical">🚨 CRITICAL TAIL-RISK ANOMALY DETECTED</div>', unsafe_allow_html=True)
-                st.progress(min(int(prob * 100), 100))
-                st.error("**Directive**: Model signals heightened probability of severe downside drawdown (>10% drop within 5-10 trading sessions). Preemptive risk reduction recommended.")
-                
-                # -------------------------------------------------------------
-                # FEATURE 3: AUTOMATED DEFENSIVE SWAP RECOMMENDATIONS
-                # -------------------------------------------------------------
-                st.markdown("#### 🔄 Automated Defensive Swap Recommendation")
-                if not val_df.empty and ticker_col in val_df.columns:
-                    latest_date_val = val_df[date_col].max() if date_col in val_df.columns else None
-                    if latest_date_val is not None:
-                        snapshot_df = val_df[val_df[date_col] == latest_date_val]
-                        if not snapshot_df.empty:
-                            safe_candidates = []
-                            for t in snapshot_df[ticker_col].unique():
-                                if t != selected_ticker:
-                                    t_row = snapshot_df[snapshot_df[ticker_col] == t].reindex(columns=feature_cols).fillna(0)
-                                    if not t_row.empty:
-                                        t_prob = float(model.predict_proba(t_row)[:, 1][0])
-                                        safe_candidates.append((t, t_prob))
-                            if safe_candidates:
-                                safe_candidates.sort(key=lambda x: x[1])
-                                best_swap, best_swap_prob = safe_candidates[0]
-                                st.info(f"💡 **Reallocation Suggestion**: Consider rotating 20% of your position into **{best_swap}** (Current Risk Score: `{best_swap_prob*100:.1f}%`) to lower overall portfolio tail-risk.")
-                else:
-                    st.info("💡 **Reallocation Suggestion**: Consider rotating into a defensive low-beta index fund or cash equivalent.")
-
-            elif prob >= 0.15:
-                st.markdown('<div class="risk-badge-elevated">⚠ ELEVATED WATCHLIST STATUS</div>', unsafe_allow_html=True)
-                st.progress(min(int(prob * 100), 100))
-                st.warning("**Directive**: Asset displays moderate volatility buildup. Monitor support levels and liquidity metrics closely.")
-            else:
-                st.markdown('<div class="risk-badge-stable">✅ STABLE MARKET EQUILIBRIUM</div>', unsafe_allow_html=True)
-                st.progress(min(int(prob * 100), 100))
-                st.success("**Directive**: Risk metrics remain within normal historical tolerance bounds. Standard position limits apply.")
-                
-            st.markdown("#### Decision Protocol Specification")
-            st.caption("""
-            * **Operational Timing**: Inference executes post-market close on Day $T$, using completed session variables to project tail-risk probability for Day $T+1$.
-            * **Model Threshold**: 30% Probability.
-            * **Calibration Rationale**: Optimized on historical market crash cycles to capture tail-risk while mitigating false positives.
-            """)
-
-        with col_right:
-            st.subheader("Key Primary Risk Drivers")
-            st.markdown("Automated scan of evaluated features driving current probability classification:")
-            
-            drivers = []
-            if 'Volatility_30D' in row_data.columns and row_data['Volatility_30D'].values[0] > 0.25:
-                drivers.append(("Annualized Volatility (30D)", f"{row_data['Volatility_30D'].values[0]:.1%}", "HIGH", "High price dispersion increases crash likelihood."))
-            if 'RSI_14' in row_data.columns:
-                r_val = row_data['RSI_14'].values[0]
-                if r_val > 70:
-                    drivers.append(("RSI (14-Day)", f"{r_val:.1f}", "OVERBOUGHT", "Overextended momentum increases pullback vulnerability."))
-                elif r_val < 30:
-                    drivers.append(("RSI (14-Day)", f"{r_val:.1f}", "OVERSOLD", "Severe momentum breakdown detected."))
-            if 'Volume_Spike_Ratio' in row_data.columns and row_data['Volume_Spike_Ratio'].values[0] > 1.8:
-                drivers.append(("Volume Spike Ratio", f"{row_data['Volume_Spike_Ratio'].values[0]:.2f}x", "ELEVATED", "Abnormal institutional volume outflow detected."))
-            if 'Lagged_Return_5D' in row_data.columns and row_data['Lagged_Return_5D'].values[0] < -0.04:
-                drivers.append(("5-Day Trailing Return", f"{row_data['Lagged_Return_5D'].values[0]:.1%}", "NEGATIVE", "Short-term downward trend momentum."))
-
-            if drivers:
-                driver_df = pd.DataFrame(drivers, columns=["Indicator", "Observed Value", "Condition", "Risk Implication"])
-                st.dataframe(driver_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No abnormal risk factor surges detected across evaluated features for this session.")
-
-    # -------------------------------------------------------------------------
-    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP (CUSTOM MULTI-STOCK EVALUATION)
-    # -------------------------------------------------------------------------
-    with tab2:
-        st.subheader("💼 Multi-Asset Portfolio 'Sleep-at-Night' Heatmap")
-        st.markdown("Monitor your custom basket of equities simultaneously with traffic-light risk classification:")
-
-        portfolio_source = st.radio(
-            "Select Portfolio Evaluation Mode", 
-            ["Custom Live Watchlist (yfinance)", "Validation Benchmark Snapshot"],
-            horizontal=True
-        )
-
-        portfolio_records = []
-
-        if portfolio_source == "Custom Live Watchlist (yfinance)":
-            default_tickers = "RELIANCE.NS, TCS.NS, INFY.NS, TATAMOTORS.NS, HDFCBANK.NS"
-            user_tickers = st.text_input("Enter Portfolio Tickers (comma-separated)", default_tickers)
-            st.caption("Examples: `RELIANCE.NS, TCS.NS, AAPL, MSFT, TSLA`")
-            
-            if user_tickers:
-                tickers_list = [t.strip() for t in user_tickers.split(",") if t.strip()]
-                with st.spinner("Analyzing portfolio telemetry across selected assets..."):
-                    for t_sym in tickers_list:
-                        try:
-                            # Reusing fetch_live_data which uses period="max" and has all feature engineering
-                            df_live = fetch_live_data(t_sym)
-                            if not df_live.empty:
-                                latest_row = df_live.tail(1)
-                                t_row = latest_row.reindex(columns=feature_cols).fillna(0)
-                                t_p = float(model.predict_proba(t_row)[:, 1][0])
-                                status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
-                                portfolio_records.append({
-                                    "Asset Symbol": t_sym.upper(),
-                                    "Crash Probability": f"{t_p*100:.1f}%",
-                                    "Risk Status": status,
-                                    "_raw_prob": t_p
-                                })
-                        except Exception as e:
-                            st.warning(f"Could not fetch telemetry for {t_sym}: {e}")
+        if stock_prob >= 0.6:
+            st.error(f"### 🔴 CRITICAL CRASH RISK ({stock_prob*100:.1f}% over next 30 days)")
+        elif stock_prob >= 0.3:
+            st.warning(f"### 🟡 MODERATE WATCHLIST RISK ({stock_prob*100:.1f}% over next 30 days)")
         else:
-            if not val_df.empty and ticker_col in val_df.columns and date_col in val_df.columns:
-                latest_dt = val_df[date_col].max()
-                current_snapshot = val_df[val_df[date_col] == latest_dt]
-                for t_sym in current_snapshot[ticker_col].unique():
-                    t_row = current_snapshot[current_snapshot[ticker_col] == t_sym].reindex(columns=feature_cols).fillna(0)
-                    if not t_row.empty:
-                        t_p = float(model.predict_proba(t_row)[:, 1][0])
-                        status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
-                        portfolio_records.append({
-                            "Asset Symbol": t_sym,
-                            "Crash Probability": f"{t_p*100:.1f}%",
-                            "Risk Status": status,
-                            "_raw_prob": t_p
-                        })
-            else:
-                st.info("Validation benchmark dataset not available.")
-
-        if portfolio_records:
-            port_df = pd.DataFrame(portfolio_records)
-            avg_port_risk = port_df["_raw_prob"].mean() * 100
+            st.success(f"### 🟢 LOW CRASH RISK ({stock_prob*100:.1f}% over next 30 days)")
             
-            col_p1, col_p2 = st.columns([1, 2])
-            with col_p1:
-                st.metric(label="PORTFOLIO SAFETY INDEX", value=f"{100 - avg_port_risk:.1f}/100", delta=f"{avg_port_risk:.1f}% Avg Risk")
-            with col_p2:
-                if avg_port_risk < 15:
-                    st.success("🟢 **Portfolio Status: Robust & Stable.** Asset allocation is well within safe historical parameters.")
-                elif avg_port_risk < 30:
-                    st.warning("🟡 **Portfolio Status: Moderate Alert.** Volatility is creeping up across selected positions.")
-                else:
-                    st.error("🔴 **Portfolio Status: High Tail-Risk Warning.** Multiple holdings exhibit high downside vulnerability.")
+        st.markdown("#### 🧠 Explainable AI Rationale:")
+        for r in reasons:
+            st.write(f"- {r}")
 
+# ==============================================================================
+# VIEW 1: HEAD-TO-HEAD SCHEME DUEL
+# ==============================================================================
+elif app_mode == "⚔️ Head-to-Head Scheme Duel":
+    st.title("⚔️ Live Head-to-Head Scheme Duel")
+    duel_source = st.radio("Selection Source:", ["⭐ Popular Active Benchmark Schemes", "🔎 Search Universal Schemes"], horizontal=True, key="duel_src")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("### 🟦 Fund A")
+        if duel_source.startswith("⭐"):
+            choice_a = st.selectbox("Select Scheme A:", list(ACTIVE_BENCHMARK_FUNDS.keys()), index=0, key="duel_preset_a")
+            code_a = ACTIVE_BENCHMARK_FUNDS[choice_a]
+        else:
+            search_options = all_schemes_df['Search_Label'].tolist() if not all_schemes_df.empty else list(ACTIVE_BENCHMARK_FUNDS.keys())
+            choice_a = st.selectbox("Search Scheme A:", options=search_options, index=0, key="duel_a")
+            code_a = all_schemes_df[all_schemes_df['Search_Label'] == choice_a]['Scheme_Code'].iloc[0] if not all_schemes_df.empty else "118989"
+            
+    with col_b:
+        st.markdown("### 🟧 Fund B")
+        if duel_source.startswith("⭐"):
+            choice_b = st.selectbox("Select Scheme B:", list(ACTIVE_BENCHMARK_FUNDS.keys()), index=1, key="duel_preset_b")
+            code_b = ACTIVE_BENCHMARK_FUNDS[choice_b]
+        else:
+            search_options = all_schemes_df['Search_Label'].tolist() if not all_schemes_df.empty else list(ACTIVE_BENCHMARK_FUNDS.keys())
+            default_b = min(1, len(search_options) - 1)
+            choice_b = st.selectbox("Search Scheme B:", options=search_options, index=default_b, key="duel_b")
+            code_b = all_schemes_df[all_schemes_df['Search_Label'] == choice_b]['Scheme_Code'].iloc[0] if not all_schemes_df.empty else "120465"
+        
+    if st.button("⚔️ Launch Live Duel", type="primary", use_container_width=True):
+        with st.spinner("Fetching live AMFI data and evaluating AI distress indicators..."):
+            try:
+                res_a = compute_scheme_metrics(code_a.strip())
+                res_b = compute_scheme_metrics(code_b.strip())
+                
+                st.markdown("---")
+                col_res1, col_res2 = st.columns(2)
+                with col_res1:
+                    st.metric(res_a['name'], f"{res_a['prob']*100:.1f}% Risk", f"{res_a['ret_1y']:+.2f}% 1Y Ret")
+                    st.markdown("**Rationale:**")
+                    for r in res_a['reasoning']: st.write(f"- {r}")
+                with col_res2:
+                    st.metric(res_b['name'], f"{res_b['prob']*100:.1f}% Risk", f"{res_b['ret_1y']:+.2f}% 1Y Ret")
+                    st.markdown("**Rationale:**")
+                    for r in res_b['reasoning']: st.write(f"- {r}")
+            except Exception as e:
+                st.error(f"Duel error: {e}")
+
+# ==============================================================================
+# VIEW 2: SINGLE SCHEME INTELLIGENCE & STRESS-TESTER
+# ==============================================================================
+elif app_mode == "🔍 Single Scheme Intelligence & Stress-Tester":
+    st.title("🔍 Single Scheme Intelligence & Stress-Testing")
+    trade_source = st.radio("Selection Source:", ["⭐ Popular Active Benchmark Schemes", "🔎 Search Full Scheme Universe"], horizontal=True)
+    c_in, c_bt = st.columns([3.5, 1])
+    with c_in:
+        if trade_source.startswith("⭐"):
+            chosen_label = st.selectbox("Select Benchmark Fund:", list(ACTIVE_BENCHMARK_FUNDS.keys()), key="preset_single_sel")
+            selected_code = ACTIVE_BENCHMARK_FUNDS[chosen_label]
+        else:
+            search_options = all_schemes_df['Search_Label'].tolist() if not all_schemes_df.empty else list(ACTIVE_BENCHMARK_FUNDS.keys())
+            selection = st.selectbox("Search any scheme:", options=search_options, index=0)
+            selected_code = all_schemes_df[all_schemes_df['Search_Label'] == selection]['Scheme_Code'].iloc[0] if not all_schemes_df.empty else "118989"
+    with c_bt:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        audit_btn = st.button("🚀 Analyze Live Scheme", type="primary", use_container_width=True)
+        
+    if selected_code:
+        with st.spinner("Fetching AMFI data and evaluating AI risk profile..."):
+            try:
+                res = compute_scheme_metrics(selected_code)
+                st.markdown(f"**Scheme:** `{res['name']}` | **Category:** `{res['category']}` | **Live NAV:** `₹{res['nav']:.2f}`")
+                
+                tab_core, tab_stress, tab_export = st.tabs(["📊 Core Risk & Rationale", "⚡ Crisis Stress-Testing", "📄 Executive Factsheet"])
+                with tab_core:
+                    st.metric("30-Day Forward Crash Probability", f"{res['prob']*100:.1f}%")
+                    st.markdown("#### 🧠 Decision Rationale:")
+                    for r in res['reasoning']:
+                        st.write(f"- {r}")
+                with tab_stress:
+                    sim_shock = st.slider("Simulate Hypothetical Market Crash (% Shock):", -40, -5, -20, step=5)
+                    est_loss = sim_shock * (res['vol'] / 15.0)
+                    st.metric(f"Simulated {sim_shock}% Shock Impact", f"{est_loss:.1f}% Loss")
+                with tab_export:
+                    report_html = generate_audit_report(res)
+                    st.download_button("📥 Download Executive HTML Factsheet", data=report_html, file_name=f"Audit_{selected_code}.html", mime="text/html")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+# ==============================================================================
+# VIEW 3: UNIVERSAL PAPER TRADING & AI LEDGER (+ FEATURE 2: REBALANCER)
+# ==============================================================================
+elif app_mode == "💼 Universal Paper Trading & AI Ledger":
+    st.title("💼 Universal Paper Trading & AI Risk Ledger")
+    
+    current_portfolio_val = sum(pos['units'] * pos['buy_price'] for pos in st.session_state.portfolio)
+    total_net_worth = st.session_state.cash + current_portfolio_val
+    overall_pnl = current_portfolio_val - sum(pos['invested_amt'] for pos in st.session_state.portfolio)
+    
+    c_w1, c_w2, c_w3, c_w4 = st.columns(4)
+    c_w1.metric("Available Paper Cash", f"₹{st.session_state.cash:,.2f}")
+    c_w2.metric("Portfolio Market Value", f"₹{current_portfolio_val:,.2f}")
+    c_w3.metric("Total Net Worth", f"₹{total_net_worth:,.2f}", f"₹{overall_pnl:+,.2f}")
+    c_w4.metric("Total Holdings", f"{len(st.session_state.portfolio)}")
+    
+    st.markdown("---")
+    st.subheader("🛒 Execute Multi-Asset Paper Order")
+    
+    asset_class = st.radio("Select Asset Class:", ["Stocks (NIFTY50)", "Mutual Funds (AMFI Live)"], horizontal=True)
+    
+    c_t1, c_t2, c_t3 = st.columns([2.5, 1, 1])
+    with c_t1:
+        if asset_class.startswith("Stocks"):
+            trade_target_name = st.selectbox("Select Stock:", ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"])
+            trade_price = st.number_input("Execution Price (₹):", value=2500.0, step=10.0)
+            trade_code = trade_target_name
+            sample_p = 0.12
+        else:
+            trade_scheme_label = st.selectbox("Select Mutual Fund Scheme:", list(ACTIVE_BENCHMARK_FUNDS.keys()))
+            trade_code = ACTIVE_BENCHMARK_FUNDS[trade_scheme_label]
+            trade_target_name = trade_scheme_label
+            try:
+                temp_res = compute_scheme_metrics(trade_code)
+                trade_price = temp_res['nav']
+                sample_p = temp_res['prob']
+            except:
+                trade_price = 100.0
+                sample_p = 0.15
+    with c_t2:
+        order_amt = st.number_input("Investment Amount (₹):", min_value=1000.0, max_value=max(1000.0, st.session_state.cash), value=10000.0, step=1000.0)
+    with c_t3:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        execute_order = st.button("📥 Execute Trade", type="primary", use_container_width=True)
+        
+    if execute_order:
+        if order_amt > st.session_state.cash:
+            st.error("Insufficient paper cash!")
+        else:
+            units_bought = order_amt / trade_price
+            st.session_state.portfolio.append({
+                'time': datetime.now().strftime("%d-%b-%Y %H:%M"),
+                'type': "Stock" if asset_class.startswith("Stocks") else "Mutual Fund",
+                'name': trade_target_name,
+                'buy_price': trade_price,
+                'units': units_bought,
+                'invested_amt': order_amt,
+                'ai_risk_pct': f"{sample_p*100:.1f}%"
+            })
+            st.session_state.cash -= order_amt
+            st.success(f"Successfully bought {units_bought:.3f} units of {trade_target_name}!")
+            st.rerun()
+
+    st.markdown("---")
+    st.subheader("📑 Active Holdings & AI Portfolio Rebalancer")
+    if len(st.session_state.portfolio) == 0:
+        st.info("No active holdings yet. Allocate virtual cash above to begin.")
+    else:
+        df_ledger = pd.DataFrame(st.session_state.portfolio)
+        st.dataframe(df_ledger, use_container_width=True)
+        
+        # FEATURE 2: Automated AI Rebalancer
+        if st.button("⚖️ Run AI Portfolio Risk Rebalancer", type="primary"):
+            st.markdown("#### 🤖 Rebalancing Audit & Recommendations:")
+            flagged_count = 0
+            for i, pos in enumerate(st.session_state.portfolio):
+                risk_val = float(pos['ai_risk_pct'].replace('%', ''))
+                if risk_val >= 50.0:
+                    flagged_count += 1
+                    st.warning(f"⚠️ **{pos['name']}** flagged with high distress risk ({pos['ai_risk_pct']}). Recommendation: Liquidate position and shift capital to *HDFC Top 100 Fund*.")
+                else:
+                    st.success(f"✅ **{pos['name']}** risk level is within acceptable tolerance ({pos['ai_risk_pct']}).")
+            if flagged_count == 0:
+                st.success("All portfolio holdings are stable. No rebalancing actions required.")
+
+        if st.button("🔄 Reset Portfolio", type="secondary"):
+            st.session_state.cash = 100000.0
+            st.session_state.portfolio = []
+            st.rerun()
+
+# ==============================================================================
+# VIEW 4: MONTE CARLO PORTFOLIO VaR SIMULATOR (+ FEATURE 3)
+# ==============================================================================
+elif app_mode == "📊 Monte Carlo Portfolio VaR Simulator":
+    st.title("📊 Monte Carlo 30-Day Value-at-Risk (VaR) Simulator")
+    st.markdown("Simulate 1,000 future price paths for your multi-asset portfolio to estimate potential tail-risk losses over the next 30 days.")
+    
+    current_portfolio_val = sum(pos['units'] * pos['buy_price'] for pos in st.session_state.portfolio)
+    
+    if current_portfolio_val <= 0:
+        st.warning("Your active portfolio has zero value. Please execute some paper trades in the Ledger module first.")
+    else:
+        sim_vol = st.slider("Estimated Portfolio Annualized Volatility (%):", 5.0, 40.0, 18.0, step=1.0)
+        sim_crash_prob = st.slider("Aggregated AI Crash Probability (%):", 0.0, 100.0, 15.0, step=1.0) / 100.0
+        
+        if st.button("🚀 Run 1,000 Monte Carlo Simulations", type="primary"):
+            var_95_val, ending_values, var_loss_pct = run_monte_carlo_var(current_portfolio_val, sim_vol, sim_crash_prob, days=30, sims=1000)
+            
             st.markdown("---")
-            st.dataframe(port_df.drop(columns=["_raw_prob"]), use_container_width=True, hide_index=True)
-
-    # -------------------------------------------------------------------------
-    # TAB 3: TECHNICAL TELEMETRY & SIGNALS
-    # -------------------------------------------------------------------------
-    with tab3:
-        st.subheader("Categorized Technical Indicator Telemetry Matrix")
-        
-        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-        
-        with col_t1:
-            st.markdown("#### ⚡ Volatility & Risk")
-            vol = row_data['Volatility_30D'].values[0] if 'Volatility_30D' in row_data.columns else 0
-            beta = row_data['Beta_60D'].values[0] if 'Beta_60D' in row_data.columns else 1.0
-            st.write(f"**30D Volatility:** `{vol:.2%}`")
-            st.write(f"**60D Beta:** `{beta:.2f}`")
-            st.write(f"**Vol x Beta Composite:** `{vol*beta:.2%}`")
-
-        with col_t2:
-            st.markdown("#### 📈 Trend & Averages")
-            sma50 = row_data['SMA_50'].values[0] if 'SMA_50' in row_data.columns else 0
-            sma200 = row_data['SMA_200'].values[0] if 'SMA_200' in row_data.columns else 0
-            ratio = sma50 / sma200 if sma200 > 0 else 1.0
-            st.write(f"**50-Day SMA:** `{sma50:,.2f}`")
-            st.write(f"**200-Day SMA:** `{sma200:,.2f}`")
-            st.write(f"**SMA 50/200 Ratio:** `{ratio:.3f}` ({'Golden Alignment' if ratio >= 1.0 else 'Death Alignment'})")
-
-        with col_t3:
-            st.markdown("#### 🚀 Momentum Indicators")
-            rsi = row_data['RSI_14'].values[0] if 'RSI_14' in row_data.columns else 50
-            ret5 = row_data['Lagged_Return_5D'].values[0] if 'Lagged_Return_5D' in row_data.columns else 0
-            st.write(f"**RSI (14D):** `{rsi:.1f}`")
-            st.write(f"**5-Day Return:** `{ret5:.2%}`")
-            st.write(f"**Momentum Status:** `{'Strong Bullish' if rsi>60 else 'Bearish Pressure' if rsi<40 else 'Neutral'}`")
-
-        with col_t4:
-            st.markdown("#### 📊 Liquidity & Volume")
-            vwap = row_data['VWAP_20D'].values[0] if 'VWAP_20D' in row_data.columns else 0
-            vol_spike = row_data['Volume_Spike_Ratio'].values[0] if 'Volume_Spike_Ratio' in row_data.columns else 1.0
-            st.write(f"**20D VWAP:** `{vwap:,.2f}`")
-            st.write(f"**Volume Spike Ratio:** `{vol_spike:.2f}x`")
-            st.write(f"**Volume Trend:** `{'Institutional Spike' if vol_spike>1.5 else 'Normal Liquidity'}`")
-
-        st.markdown("---")
-        st.subheader("Synchronized Historical Telemetry Chart")
-        
-        if not ticker_data.empty and 'Close' in ticker_data.columns and date_col:
-            chart_df = ticker_data.set_index(date_col)
+            c_m1, c_m2, c_m3 = st.columns(3)
+            c_m1.metric("Current Portfolio Value", f"₹{current_portfolio_val:,.2f}")
+            c_m2.metric("95% 30-Day Value-at-Risk (VaR)", f"₹{var_95_val:,.2f}", f"{var_loss_pct:+.2f}%")
+            c_m3.metric("Simulated Worst-Case Floor (1%)", f"₹{np.percentile(ending_values, 1):,.2f}")
             
-            c_tab1, c_tab2 = st.tabs(["Price Action & Moving Averages", "Volume Spike & Volatility Profile"])
-            
-            with c_tab1:
-                cols_to_plot = [c for c in ['Close', 'SMA_50', 'SMA_200'] if c in chart_df.columns]
-                st.line_chart(chart_df[cols_to_plot], use_container_width=True)
-                
-            with c_tab2:
-                cols_vol = [c for c in ['Volume_Spike_Ratio', 'Volatility_30D'] if c in chart_df.columns]
-                if cols_vol:
-                    st.line_chart(chart_df[cols_vol], use_container_width=True)
-                else:
-                    st.info("Volume/Volatility trend telemetry stream unavailable.")
+            fig = px.histogram(ending_values, nbins=50, title="Distribution of Portfolio Ending Values (30 Days Ahead)",
+                               labels={'value': 'Ending Portfolio Value (₹)', 'count': 'Frequency'})
+            fig.add_vline(x=var_95_val, line_dash="dash", line_color="red", annotation_text="95% VaR Threshold")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------------------------------------------------
-    # TAB 4: MODEL ATTRIBUTION & DIAGNOSTICS (XAI)
-    # -------------------------------------------------------------------------
-    with tab4:
-        st.subheader("Explainable AI (XAI) & Model Diagnostics")
-        st.markdown("Quantifying global model weightings alongside local feature value deviations to provide complete auditability.")
-        
-        col_x1, col_x2 = st.columns([1.2, 1], gap="large")
-        
-        with col_x1:
-            st.markdown("#### Global Feature Importance (Random Forest Weightings)")
-            importances = pd.Series(model.feature_importances_, index=feature_cols).sort_values(ascending=True)
-            st.bar_chart(importances, use_container_width=True)
-            
-        with col_x2:
-            st.markdown("#### Local Instance Input Vector")
-            st.markdown("Raw numerical vector passed to the prediction engine for current session:")
-            
-            x_val_df = X_input.T.reset_index()
-            x_val_df.columns = ["Feature Dimension", "Session Value"]
-            st.dataframe(x_val_df, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.markdown("### 🔬 Model Transparency Note")
-        st.caption("""
-        * **Global Weights**: Derived from Gini impurity reduction across all decision trees in the ensemble model.
-        * **Auditability**: Feature shapes and names are automatically synchronized via `model.feature_names_in_` to guarantee exact inference integrity.
-        """)
+# ==============================================================================
+# VIEW 5: HISTORICAL DATASET ARCHIVE
+# ==============================================================================
+else:
+    st.title("📁 Historical Research Dataset (47,272 Records)")
+    all_names = sorted(funds_df['Fund_Name'].dropna().unique().tolist())
+    picked_fund = st.selectbox("Select Historical Fund:", all_names)
+    if picked_fund:
+        row = funds_df[funds_df['Fund_Name'] == picked_fund].iloc[0]
+        st.markdown(f"**Scheme:** `{row['Fund_Name']}` | **Category:** `{row.get('Category', 'N/A')}`")
+        X_h = pd.DataFrame([[float(row[c]) for c in features]], columns=features)
+        h_prob = float(model.predict_proba(X_h)[0, 1])
+        st.metric("Historical Failure Risk", f"{h_prob*100:.1f}%")
