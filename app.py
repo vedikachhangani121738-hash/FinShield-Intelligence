@@ -27,7 +27,6 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Terminal Header Bar */
     .terminal-header {
         background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%);
         border: 1px solid #334155;
@@ -50,7 +49,6 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* Institutional Metric Cards */
     [data-testid="stMetric"] {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -71,7 +69,6 @@ st.markdown("""
         color: #F8FAFC;
     }
 
-    /* Custom Risk Status Badges */
     .risk-badge-critical {
         background-color: rgba(239, 68, 68, 0.15);
         color: #EF4444;
@@ -106,7 +103,6 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* Sidebar Styling & Text Contrast */
     [data-testid="stSidebar"] {
         background-color: #0F172A;
         border-right: 1px solid #1E293B;
@@ -119,7 +115,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Header Display
 st.markdown("""
 <div class="terminal-header">
     <div class="terminal-title">🛡️ FinShield Risk Intelligence Terminal</div>
@@ -140,7 +135,7 @@ def load_model():
 
 model = load_model()
 
-# Align feature expectations with model definition
+# Align feature expectations strictly with model definition (`model.feature_names_in_`)
 if model is not None and hasattr(model, "feature_names_in_"):
     feature_cols = list(model.feature_names_in_)
 else:
@@ -218,6 +213,8 @@ else:
     if selected_ticker:
         @st.cache_data(ttl=3600)
         def fetch_live_data(symbol):
+            # Using period="max" provides sufficient historical runway for 200-day moving averages
+            # without running into rolling truncation bottlenecks.
             df = yf.download(symbol, period="max", interval="1d", progress=False)
             if df.empty:
                 return pd.DataFrame()
@@ -263,14 +260,13 @@ else:
 if model is None or row_data.empty:
     st.info("💡 **Terminal Ready**: Select an asset from the sidebar or search a company keyword to initialize telemetry analytics.")
 else:
-    # Prepare input feature matrix safely aligned with model training shape
+    # Safely reindex feature matrix to match exact training columns and prevent shape mismatch
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
     
     # Calculate Crash Risk Probability
     prob = float(model.predict_proba(X_input.values)[:, 1][0])
     is_anomaly = prob >= 0.30
     
-    # Institutional Tab Routing
     tab1, tab2, tab3 = st.tabs([
         "🛡️ Executive Risk Scorecard", 
         "📊 Technical Telemetry & Signals", 
@@ -283,28 +279,25 @@ else:
     with tab1:
         st.markdown(f"### Asset Overview: **{selected_ticker}** | Valuation Timestamp: **{selected_date}**")
         
-        # Dynamic Crash Probability Styling Logic (Synced with Model Output 'prob')
         crash_prob_pct = round(prob * 100, 1)
         threshold = 30.0
         is_high_risk = crash_prob_pct >= threshold
 
         if is_high_risk:
             bg_gradient = "linear-gradient(145deg, #2b1d1d 0%, #4a1515 100%)"
-            border_color = "#EF4444"  # Vibrant Red
+            border_color = "#EF4444"
             shadow_color = "rgba(239, 68, 68, 0.4)"
             status_text = f"▲ High Risk (Above {threshold}% Threshold)"
             status_color = "#FCA5A5"
         else:
             bg_gradient = "linear-gradient(145deg, #1b2e1b 0%, #163820 100%)"
-            border_color = "#10B981"  # Vibrant Green
+            border_color = "#10B981"
             shadow_color = "rgba(16, 185, 129, 0.4)"
             status_text = f"▼ Safe (Below {threshold}% Threshold)"
             status_color = "#6EE7B7"
 
-        # Reordered columns: Crash Probability is now FIRST (col1)
         c1, c2, c3, c4 = st.columns(4)
         
-        # 1. Crash Risk Probability (Highlighted First with Red/Green Status)
         with c1:
             st.markdown(
                 f"""
@@ -323,20 +316,17 @@ else:
                 unsafe_allow_html=True
             )
         
-        # 2. Spot Settlement Price
         with c2:
             if 'Close' in row_data.columns:
                 close_p = row_data['Close'].values[0]
                 price_str = f"${close_p:,.2f}" if isinstance(close_p, (int, float)) else str(close_p)
                 st.metric(label="SETTLEMENT PRICE", value=price_str)
         
-        # 3. 30D Volatility
         with c3:
             if 'Volatility_30D' in row_data.columns:
                 vol_val = row_data['Volatility_30D'].values[0]
                 st.metric(label="ANNUALIZED VOLATILITY (30D)", value=f"{vol_val:.1%}")
             
-        # 4. RSI 14
         with c4:
             if 'RSI_14' in row_data.columns:
                 rsi_val = row_data['RSI_14'].values[0]
@@ -364,8 +354,9 @@ else:
                 
             st.markdown("#### Decision Protocol Specification")
             st.caption("""
+            * **Operational Timing**: Inference executes post-market close on Day $T$, using completed session variables to project tail-risk probability for Day $T+1$.
             * **Model Threshold**: 30% Probability.
-            * **Calibration Rationale**: Optimized on historical NIFTY50 market crash cycles to capture **~77% of tail-risk crashes** while mitigating false positives.
+            * **Calibration Rationale**: Optimized on historical NIFTY50 market crash cycles to capture tail-risk while mitigating false positives.
             """)
 
         with col_right:
