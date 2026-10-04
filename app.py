@@ -11,7 +11,7 @@ import requests
 import matplotlib.pyplot as plt
 import io
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen::canvas import Canvas if False else from reportlab.pdfgen import canvas
+from reportlab.pdfgen import canvas
 
 # Safe SHAP import to prevent startup crashes if package is missing
 try:
