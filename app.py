@@ -9,7 +9,7 @@ import yfinance as yf
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="FinShield | Institutional Risk Intelligence Terminal",
-    page_icon="🛡️",
+    page_icon="🛡️️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -163,6 +163,38 @@ val_df = load_val_data()
 ticker_col = "Ticker" if (not val_df.empty and "Ticker" in val_df.columns) else (val_df.columns[0] if not val_df.empty else "Ticker")
 date_col = "Date" if (not val_df.empty and "Date" in val_df.columns) else (val_df.columns[1] if not val_df.empty and len(val_df.columns) > 1 else "Date")
 
+@st.cache_data(ttl=3600)
+def fetch_live_data(symbol):
+    df = yf.download(symbol, period="max", interval="1d", progress=False)
+    if df.empty:
+        return pd.DataFrame()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+        
+    df['Close_pct'] = df['Close'].pct_change()
+    df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
+    
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs = gain / (loss.replace(0, 1e-6))
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    df['SMA_50'] = df['Close'].rolling(50).mean()
+    df['SMA_200'] = df['Close'].rolling(200).mean()
+    df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
+    df['Beta_60D'] = 1.0 
+    df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
+    df['Lagged_Return_5D'] = df['Close'].pct_change(5)
+    df['Lagged_Volume_5D'] = df['Volume'].shift(5)
+    df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
+    df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
+    df['Market_Volatility_Index'] = 15.0 
+    
+    df['Date'] = df.index
+    df['Month'] = df['Date'].dt.month
+    return df.dropna()
+
 # -----------------------------------------------------------------------------
 # 3. SIDEBAR TERMINAL CONTROLS & DATA STREAM SELECTION
 # -----------------------------------------------------------------------------
@@ -220,38 +252,6 @@ else:
             st.sidebar.error(f"Search API Query Error: {e}")
 
     if selected_ticker:
-        @st.cache_data(ttl=3600)
-        def fetch_live_data(symbol):
-            df = yf.download(symbol, period="max", interval="1d", progress=False)
-            if df.empty:
-                return pd.DataFrame()
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-                
-            df['Close_pct'] = df['Close'].pct_change()
-            df['Volatility_30D'] = df['Close_pct'].rolling(30).std() * np.sqrt(252)
-            
-            delta = df['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-            rs = gain / (loss.replace(0, 1e-6))
-            df['RSI_14'] = 100 - (100 / (1 + rs))
-            
-            df['SMA_50'] = df['Close'].rolling(50).mean()
-            df['SMA_200'] = df['Close'].rolling(200).mean()
-            df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
-            df['Beta_60D'] = 1.0 
-            df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
-            df['Lagged_Return_5D'] = df['Close'].pct_change(5)
-            df['Lagged_Volume_5D'] = df['Volume'].shift(5)
-            df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
-            df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
-            df['Market_Volatility_Index'] = 15.0 
-            
-            df['Date'] = df.index
-            df['Month'] = df['Date'].dt.month
-            return df.dropna()
-
         ticker_data = fetch_live_data(selected_ticker)
         if not ticker_data.empty:
             date_col = 'Date'
@@ -302,7 +302,7 @@ else:
                     X_test_shock['Lagged_Return_5D'] = -0.07
                 if 'Volume_Spike_Ratio' in X_test_shock.columns:
                     X_test_shock['Volume_Spike_Ratio'] = 1.9
-            elif news_scenario == "🏛️️ Earnings Guidance Miss / Panic Selling":
+            elif news_scenario == "🏛 Earnings Guidance Miss / Panic Selling":
                 if 'Lagged_Return_5D' in X_test_shock.columns:
                     X_test_shock['Lagged_Return_5D'] = -0.10
                 if 'Volume_Spike_Ratio' in X_test_shock.columns:
@@ -496,42 +496,19 @@ else:
                 with st.spinner("Analyzing portfolio telemetry across selected assets..."):
                     for t_sym in tickers_list:
                         try:
-                            # FIXED: Increased period from "6mo" to "2y" so SMA_200 has enough trading days
-                            df_live = yf.download(t_sym, period="max", interval="1d", progress=False)
+                            # Reusing fetch_live_data which uses period="max" and has all feature engineering
+                            df_live = fetch_live_data(t_sym)
                             if not df_live.empty:
-                                if isinstance(df_live.columns, pd.MultiIndex):
-                                    df_live.columns = df_live.columns.get_level_values(0)
-                                
-                                df_live['Close_pct'] = df_live['Close'].pct_change()
-                                df_live['Volatility_30D'] = df_live['Close_pct'].rolling(30).std() * np.sqrt(252)
-                                
-                                delta = df_live['Close'].diff()
-                                gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-                                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-                                rs = gain / (loss.replace(0, 1e-6))
-                                df_live['RSI_14'] = 100 - (100 / (1 + rs))
-                                
-                                df_live['SMA_50'] = df_live['Close'].rolling(50).mean()
-                                df_live['SMA_200'] = df_live['Close'].rolling(200).mean()
-                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
-                                df_live['Beta_60D'] = 1.0
-                                df_live['Vol_x_Beta'] = df_live['Volatility_30D'] * df_live['Beta_60D']
-                                df_live['Lagged_Return_5D'] = df_live['Close'].pct_change(5)
-                                df_live['Volume_Spike_Ratio'] = df_live['Volume'] / (df_live['Volume'].rolling(20).mean().replace(0, 1))
-                                df_live['Market_Volatility_Index'] = 15.0
-                                df_live['Month'] = pd.to_datetime(df_live.index).month
-                                
-                                latest_row = df_live.dropna().tail(1)
-                                if not latest_row.empty:
-                                    t_row = latest_row.reindex(columns=feature_cols).fillna(0)
-                                    t_p = float(model.predict_proba(t_row)[:, 1][0])
-                                    status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
-                                    portfolio_records.append({
-                                        "Asset Symbol": t_sym.upper(),
-                                        "Crash Probability": f"{t_p*100:.1f}%",
-                                        "Risk Status": status,
-                                        "_raw_prob": t_p
-                                    })
+                                latest_row = df_live.tail(1)
+                                t_row = latest_row.reindex(columns=feature_cols).fillna(0)
+                                t_p = float(model.predict_proba(t_row)[:, 1][0])
+                                status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
+                                portfolio_records.append({
+                                    "Asset Symbol": t_sym.upper(),
+                                    "Crash Probability": f"{t_p*100:.1f}%",
+                                    "Risk Status": status,
+                                    "_raw_prob": t_p
+                                })
                         except Exception as e:
                             st.warning(f"Could not fetch telemetry for {t_sym}: {e}")
         else:
