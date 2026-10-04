@@ -42,6 +42,15 @@ st.markdown("""
     }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     
+    /* FIX: Ensure input text and selectbox text inside sidebar widgets are clearly visible (Dark Blue) */
+    [data-testid="stSidebar"] .stTextInput input, 
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span {
+        color: #0A2540 !important;
+    }
+    [data-testid="stSidebar"] .stTextInput input::placeholder {
+        color: #94A3B8 !important;
+    }
+    
     h1, h2, h3 { 
         color: #0A2540; 
         font-weight: 700; 
