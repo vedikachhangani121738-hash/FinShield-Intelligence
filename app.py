@@ -42,11 +42,13 @@ st.markdown("""
     }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     
-    /* FIX: Ensure input text, selectbox text, and dropdown items are clearly visible (Dark Blue) */
+    /* FIX: Ensure input text, selectbox text, selected values, and dropdown items are clearly visible (Dark Blue) */
     [data-testid="stSidebar"] .stTextInput input, 
     [data-testid="stSidebar"] .stSelectbox div,
     [data-testid="stSidebar"] .stSelectbox span,
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] * {
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] *,
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div {
         color: #0A2540 !important;
     }
     [data-testid="stSidebar"] .stTextInput input::placeholder {
