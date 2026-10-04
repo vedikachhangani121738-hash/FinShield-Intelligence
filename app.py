@@ -1,553 +1,485 @@
-import streamlit as st
-import pandas as pd
+import sys, os, pickle, math
+from datetime import datetime
 import numpy as np
+import pandas as pd
+import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
-import yfinance as yf
-import joblib
-from datetime import datetime
 
-# ==========================================
-# 1. PAGE CONFIGURATION & ADVANCED UI CSS
-# ==========================================
+# --- sklearn pickle compatibility ---
+try:
+    import sklearn._loss
+    sys.modules["_loss"] = sklearn._loss
+    if hasattr(sklearn._loss, "_loss"):
+        sys.modules["_loss._loss"] = sklearn._loss._loss
+except Exception:
+    pass
+try:
+    import sklearn.ensemble._gb_losses as _gb_losses
+    sys.modules["_gb_losses"] = _gb_losses
+except Exception:
+    pass
+
+try:
+    from mftool import Mftool
+except Exception:
+    Mftool = None
+
 st.set_page_config(
-    page_title="FinShield Intelligence | Global Terminal", 
-    page_icon="🛡️", 
-    layout="wide", 
-    initial_sidebar_state="expanded"
+    page_title="FinShield | Stock Market & Mutual Fund Intelligence",
+    page_icon="🛡️", layout="wide", initial_sidebar_state="expanded"
 )
 
+# ============================ STYLE ============================
 st.markdown("""
 <style>
-    /* Global Typography: Times New Roman */
-    html, body, [data-testid="stAppViewContainer"], p, span, label, .stTextInput, .stSelectbox, .stNumberInput, div {
-        font-family: 'Times New Roman', Times, serif !important;
-    }
-    [data-testid="stAppViewContainer"] { background-color: #F8FAFC; }
-    [data-testid="stSidebar"] { background-color: #0A2540 !important; }
-    [data-testid="stSidebar"] * { color: #E2E8F0 !important; font-family: 'Times New Roman', Times, serif !important; }
-    
-    h1, h2, h3 { 
-        color: #0A2540; 
-        font-family: 'Times New Roman', Times, serif !important; 
-        font-weight: bold; 
-    }
-    
-    .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input { 
-        border-radius: 8px; 
-        border: 2px solid #0A2540; 
-        font-weight: bold; 
-        font-family: 'Times New Roman', Times, serif !important;
-    }
-    
-    .blue-card { 
-        background: linear-gradient(135deg, #0A2540 0%, #1E3A8A 100%);
-        color: #FFFFFF; 
-        padding: 1.5rem; 
-        border-radius: 14px; 
-        box-shadow: 0 10px 20px rgba(10,37,64,0.15); 
-        margin-bottom: 1rem; 
-        border-left: 6px solid; 
-        font-family: 'Times New Roman', Times, serif !important;
-    }
-    .blue-card h3, .blue-card p, .blue-card h2 { 
-        color: #FFFFFF !important; 
-        font-family: 'Times New Roman', Times, serif !important;
-        margin: 0; 
-    }
-    
-    .badge-safe { background-color: #D1FAE5; color: #065F46; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
-    .badge-danger { background-color: #FEE2E2; color: #991B1B; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
-    .badge-winner { background-color: #FEF3C7; color: #92400E; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; display: inline-block; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    
-    .js-plotly-plot { margin: 0 auto; }
+.stApp{background:#f5f7fb}
+.block-container{max-width:1500px;padding-top:1rem}
+.hero{padding:1.5rem;border:1px solid #e2e8f0;border-radius:22px;
+background:linear-gradient(135deg,#fff,#eef4ff);box-shadow:0 10px 30px #0f172a0c;margin-bottom:1rem}
+.hero h1{margin:0;font-size:2.25rem;letter-spacing:-.04em}
+.hero p{color:#64748b;margin:.35rem 0 0}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1rem;
+box-shadow:0 5px 18px #0f172a08}
+.note{color:#64748b;font-size:.78rem}
+.insight{border-left:4px solid #2563eb;background:#eff6ff;padding:.8rem 1rem;border-radius:10px}
+.warn{border-left:4px solid #f59e0b;background:#fffbeb;padding:.8rem 1rem;border-radius:10px}
+.good{border-left:4px solid #22c55e;background:#f0fdf4;padding:.8rem 1rem;border-radius:10px}
+.bad{border-left:4px solid #ef4444;background:#fef2f2;padding:.8rem 1rem;border-radius:10px}
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. SESSION STATE INITIALIZATION
-# ==========================================
-if 'cash_balance' not in st.session_state:
-    st.session_state.cash_balance = 1000000.0  # ₹10,00,000 Initial Capital
-if 'trade_ledger' not in st.session_state:
-    st.session_state.trade_ledger = []
+FEATURES = [
+    "NAV","Daily_Return_Pct","Annualized_Return_1Y","Volatility_30D",
+    "Annualized_Volatility_Cleaned","Sharpe_Ratio_Cleaned",
+    "Sortino_Ratio_Cleaned","Max_Drawdown_1Y_Pct","Composite_Score",
+    "Lag_1D_Return","Lag_5D_Return"
+]
 
-# ==========================================
-# 3. GLOBAL LIVE YFINANCE & PIPELINES
-# ==========================================
-@st.cache_data(ttl=900)
-def fetch_live_data(ticker):
-    clean_ticker = ticker.strip()
+ACTIVE = {
+"HDFC Top 100 Fund - Direct Growth":"119018",
+"HDFC Mid-Cap Opportunities Fund - Direct Growth":"118989",
+"ICICI Prudential Bluechip Fund - Direct Growth":"120586",
+"SBI Bluechip Fund - Direct Growth":"119598",
+"Nippon India Small Cap Fund - Direct Growth":"118778",
+"Parag Parikh Flexi Cap Fund - Direct Growth":"122639",
+"Axis Large Cap Fund - Direct Growth":"120465",
+"Mirae Asset Large Cap Fund - Direct Growth":"118834",
+"Kotak Emerging Equity Fund - Direct Growth":"120152",
+"Quant Active Fund - Direct Growth":"120828"
+}
+
+# Retained from original app; replace with verified latest monthly holdings in production.
+HOLDINGS = {
+"HDFC Top 100 Fund - Direct Growth":{"HDFC Bank":9.8,"Reliance Industries":8.2,"ICICI Bank":7.4,"Infosys":6.1,"Larsen & Toubro":4.5,"ITC Ltd":3.8,"TCS":3.5,"Bharti Airtel":3.2,"Axis Bank":2.9,"State Bank of India":2.6},
+"ICICI Prudential Bluechip Fund - Direct Growth":{"ICICI Bank":8.9,"Reliance Industries":7.5,"HDFC Bank":7.1,"Larsen & Toubro":5.2,"Infosys":4.8,"Bharti Airtel":3.9,"Axis Bank":3.4,"Maruti Suzuki":2.8,"TCS":2.5,"UltraTech Cement":2.2},
+"SBI Bluechip Fund - Direct Growth":{"HDFC Bank":8.6,"ICICI Bank":7.2,"Reliance Industries":6.8,"Infosys":5.4,"Larsen & Toubro":4.3,"ITC Ltd":3.9,"State Bank of India":3.5,"TCS":3.1,"Bharti Airtel":2.8,"Axis Bank":2.0},
+"Parag Parikh Flexi Cap Fund - Direct Growth":{"HDFC Bank":7.8,"Bajaj Holdings":6.5,"ITC Ltd":6.2,"Power Grid Corp":5.4,"ICICI Bank":5.1,"Coal India":4.7,"Alphabet Inc (Google)":4.2,"Microsoft Corp":3.8,"Axis Bank":3.2,"Maruti Suzuki":2.9},
+"Axis Large Cap Fund - Direct Growth":{"Bajaj Finance":8.5,"ICICI Bank":8.1,"HDFC Bank":7.9,"Tata Consultancy Services":6.2,"Infosys":5.8,"Avenue Supermarts (DMart)":5.1,"Reliance Industries":4.6,"Kotak Mahindra Bank":4.2,"Nestle India":3.5,"Titan Company":3.1},
+"Mirae Asset Large Cap Fund - Direct Growth":{"HDFC Bank":9.2,"ICICI Bank":8.5,"Reliance Industries":7.9,"Infosys":6.4,"Larsen & Toubro":4.7,"TCS":3.9,"Axis Bank":3.5,"State Bank of India":3.1,"Bharti Airtel":2.9,"ITC Ltd":2.6},
+"HDFC Mid-Cap Opportunities Fund - Direct Growth":{"Indian Hotels":4.8,"Tata Communications":4.2,"Bharat Electronics":3.9,"Federal Bank":3.7,"Max Healthcare":3.5,"Coforge Ltd":3.1,"Balkrishna Industries":2.9,"Apollo Tyres":2.6,"Sundram Fasteners":2.4,"HDFC Bank":1.8},
+"Kotak Emerging Equity Fund - Direct Growth":{"Supreme Industries":4.6,"Cummins India":4.1,"Schaeffler India":3.8,"Solar Industries":3.5,"Thermax Ltd":3.2,"Persistent Systems":3.0,"Bharat Forge":2.8,"Trent Ltd":2.5,"Atul Ltd":2.3,"Federal Bank":2.1},
+"Nippon India Small Cap Fund - Direct Growth":{"Tube Investments":3.2,"HDFC Bank":2.8,"Apar Industries":2.5,"KPIT Technologies":2.3,"Multi Commodity Exchange":2.1,"Carborundum Universal":1.9,"CreditAccess Grameen":1.8,"Magellanic Cloud":1.7,"Poonawalla Fincorp":1.6,"Timken India":1.5},
+"Quant Active Fund - Direct Growth":{"Reliance Industries":9.4,"Jio Financial Services":6.8,"Adani Power":5.9,"HDFC Bank":5.4,"Tata Power":4.8,"Steel Authority of India":4.2,"Larsen & Toubro":3.9,"Sun Pharma":3.4,"Aurobindo Pharma":3.1,"Punjab National Bank":2.8}
+}
+
+# ============================ STATE ============================
+for k,v in {"cash":100000.0,"portfolio":[],"watchlist":[]}.items():
+    if k not in st.session_state: st.session_state[k]=v
+
+# ============================ MODEL ============================
+@st.cache_resource
+def load_model():
+    if os.path.exists("dashboard_model_bundle.pkl"):
+        try:
+            with open("dashboard_model_bundle.pkl","rb") as f:
+                b=pickle.load(f)
+            return b["model"], b.get("features",FEATURES), "dashboard_model_bundle.pkl", b
+        except Exception:
+            pass
+    from sklearn.ensemble import GradientBoostingClassifier
+    X=np.array([
+    [150,.05,18,14,16,.8,1.1,-8,.72,.02,.10],
+    [85,.02,12,18,20,.3,.4,-16,.45,-.05,.02],
+    [25,-.25,-5,26,28,-.4,-.6,-32,.22,-.30,-.45],
+    [210,.10,24,13,15,1.1,1.5,-6,.85,.08,.15],
+    [18,-.40,-12,32,35,-.9,-1.2,-45,.15,-.50,-.80],
+    [120,.04,16,15,17,.6,.8,-10,.65,.01,.04],
+    [55,-.10,5,23,26,-.1,-.2,-24,.32,-.12,-.18],
+    [300,.12,30,11,13,1.5,1.9,-5,.90,.10,.20]])
+    y=np.array([0,0,1,0,1,0,1,0])
+    m=GradientBoostingClassifier(n_estimators=120,learning_rate=.05,max_depth=2,random_state=42)
+    m.fit(X,y)
+    return m,FEATURES,"Fallback synthetic demonstration model",{}
+
+model,features,model_source,bundle=load_model()
+
+# ============================ AMFI ============================
+@st.cache_resource
+def load_amfi():
+    if Mftool is None:return None,pd.DataFrame()
+    o=Mftool()
     try:
-        df = yf.download(clean_ticker, period="1y", interval="1d", progress=False)
-        if df.empty and not clean_ticker.endswith('.NS'):
-            df = yf.download(f"{clean_ticker}.NS", period="1y", interval="1d", progress=False)
-            
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-            
-        df.reset_index(inplace=True)
-        return df
-    except Exception as e:
-        return pd.DataFrame()
+        d=o.get_scheme_codes()
+        df=pd.DataFrame(list(d.items()),columns=["Scheme_Code","Scheme_Name"])
+        df["Scheme_Code"]=df["Scheme_Code"].astype(str)
+        df["Scheme_Name"]=df["Scheme_Name"].astype(str)
+        df=df[~df["Scheme_Name"].str.contains(r"\bMIP\b|\bFMP\b|Fixed Maturity|Dividend|IDCW",case=False,na=False)]
+        df["Search_Label"]=df["Scheme_Name"]+" [Code: "+df["Scheme_Code"]+"]"
+        return o,df
+    except Exception:return o,pd.DataFrame()
+amfi,all_schemes=load_amfi()
 
-def calculate_crash_risk(df):
-    try:
-        rf_model = joblib.load('random_forest_crash_model.joblib') 
-        return 15.0 
-    except FileNotFoundError:
-        returns = df['Close'].pct_change().dropna()
-        volatility = returns.std() * np.sqrt(252) * 100  
-        momentum = (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) * 100 
-        risk = (volatility * 1.8) - (momentum * 0.8)
-        return max(2.0, min(98.0, risk))
+def get_nav(code):
+    if amfi is None: raise RuntimeError("Install mftool: pip install mftool")
+    d=amfi.get_scheme_details(str(code))
+    if not d: raise ValueError(f"Scheme {code} is inactive/unrecognized by AMFI.")
+    h=amfi.get_scheme_historical_nav(str(code),as_Dataframe=True)
+    if h is None or len(h)<30: raise ValueError("Insufficient NAV history returned.")
+    h=pd.DataFrame(h).copy()
+    h["nav"]=pd.to_numeric(h["nav"],errors="coerce")
+    h=h.dropna(subset=["nav"])
+    h.index=pd.to_datetime(h.index,dayfirst=True,errors="coerce")
+    h=h[~h.index.isna()].sort_index()
+    return d,h
 
-def compute_technical_indicators(df):
-    df = df.copy()
-    df['SMA_20'] = df['Close'].rolling(window=20).mean()
-    df['SMA_50'] = df['Close'].rolling(window=50).mean()
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = exp1 - exp2
-    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    return df
+def analyze(code,rf=6.5):
+    d,h=get_nav(code)
+    r=h.nav.pct_change().dropna()
+    nav=float(h.nav.iloc[-1])
+    n21=float(h.nav.iloc[-21]); n252=float(h.nav.iloc[-252]) if len(h)>=252 else float(h.nav.iloc[0])
+    n756=float(h.nav.iloc[-756]) if len(h)>=756 else float(h.nav.iloc[0])
+    n1260=float(h.nav.iloc[-1260]) if len(h)>=1260 else float(h.nav.iloc[0])
+    r1m=(nav/n21-1)*100; r1y=(nav/n252-1)*100
+    r3=((nav/n756)**(1/3)-1)*100 if len(h)>=756 else np.nan
+    r5=((nav/n1260)**(1/5)-1)*100 if len(h)>=1260 else np.nan
+    vol=float(r.tail(252).std()*np.sqrt(252)*100)
+    vol30=float(r.tail(30).std()*np.sqrt(252)*100)
+    vol=15 if not np.isfinite(vol) or vol<=0 else vol
+    vol30=12 if not np.isfinite(vol30) or vol30<=0 else vol30
+    dd=(h.nav.tail(252)/h.nav.tail(252).cummax()-1)*100
+    maxdd=float(dd.min())
+    down=np.minimum(r.tail(252).values,0)
+    downside=float(np.sqrt(np.mean(down**2))*np.sqrt(252)*100)
+    downside=vol if not np.isfinite(downside) or downside<=0 else downside
+    sharpe=(r1y-rf)/vol
+    sortino=(r1y-rf)/downside
+    rc=np.clip((r1y-rf)/25,-1,1); vc=np.clip((18-vol)/18,-1,1)
+    dc=np.clip((15+maxdd)/15,-1,1); sc=np.clip(sharpe/2,-1,1)
+    score=float(np.clip(.5+.35*(.35*rc+.25*vc+.2*dc+.2*sc),.05,.95))
+    feat={"NAV":nav,"Daily_Return_Pct":r.iloc[-1]*100,"Annualized_Return_1Y":r1y,
+          "Volatility_30D":vol30,"Annualized_Volatility_Cleaned":vol,
+          "Sharpe_Ratio_Cleaned":sharpe,"Sortino_Ratio_Cleaned":sortino,
+          "Max_Drawdown_1Y_Pct":maxdd,"Composite_Score":score,
+          "Lag_1D_Return":r.iloc[-1]*100,
+          "Lag_5D_Return":((h.nav.iloc[-1]/h.nav.iloc[-6])-1)*100}
+    X=pd.DataFrame([feat])
+    for f in features:
+        if f not in X:X[f]=0
+    try:p=float(model.predict_proba(X[features])[0,1])
+    except Exception:p=float(np.clip(.7-score,.02,.98))
+    return {"code":str(code),"name":d.get("scheme_name","Unknown Scheme"),
+            "category":d.get("scheme_category","Mutual Fund"),"amc":d.get("fund_house","AMC"),
+            "nav":nav,"ret1m":r1m,"ret1y":r1y,"ret3y":r3,"ret5y":r5,
+            "vol":vol,"vol30":vol30,"dd":maxdd,"sharpe":sharpe,"sortino":sortino,
+            "score":score,"prob":np.clip(p,0,1),"navdf":h,"features":feat}
 
-# Expanded Institutional Mutual Fund Database
-mf_database = pd.DataFrame({
-    'Fund Name': [
-        'Quant Active Fund', 'Parag Parikh Flexi Cap', 'SBI Bluechip Fund', 
-        'Nippon India Small Cap', 'HDFC Mid-Cap Opportunities', 'Axis Bluechip Fund',
-        'Mirae Asset Large Cap', 'Kotak Emerging Equity', 'ICICI Pru Bluechip Fund',
-        'Tata Digital India Fund', 'SBI Small Cap Fund', 'UTI Flexi Cap Fund'
-    ],
-    'Category': [
-        'Multi Cap', 'Flexi Cap', 'Large Cap', 'Small Cap', 'Mid Cap', 'Large Cap',
-        'Large Cap', 'Mid Cap', 'Large Cap', 'Thematic / Tech', 'Small Cap', 'Flexi Cap'
-    ],
-    '1Y Return (%)': [32.4, 24.5, 18.2, 45.1, 38.6, 16.8, 19.2, 36.4, 19.5, 28.1, 41.2, 22.1],
-    'Alpha': [5.2, 3.8, 1.1, 7.5, 6.2, 0.9, 1.4, 5.8, 1.5, 4.2, 6.9, 2.9],
-    'Beta': [1.10, 0.85, 0.95, 1.25, 1.15, 0.90, 0.92, 1.12, 0.93, 1.30, 1.18, 0.88],
-    'Expense Ratio (%)': [0.58, 0.65, 1.10, 0.75, 0.92, 1.02, 0.98, 0.82, 0.95, 0.85, 0.78, 0.90],
-    'Risk Score': [65, 40, 35, 85, 72, 32, 34, 70, 36, 88, 80, 42]
-})
+def clean(s):return str(s).replace("⭐ ","")
+def status(p):return "🔴 Critical" if p>=.6 else ("🟡 Watchlist" if p>=.3 else "🟢 Healthy")
+def money(x):return f"₹{float(x):,.2f}"
+def pc(x):return f"{float(x):+.2f}%"
 
-popular_tickers = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "TATAMOTORS.NS", "AAPL", "GOOGL", "TSLA", "Custom Ticker..."]
+def selector(label,key):
+    source=st.radio("Source",["⭐ Popular active","🔎 Full AMFI universe"],horizontal=True,key=key+"_src")
+    if source.startswith("⭐") or all_schemes.empty:
+        name=st.selectbox(label,list(ACTIVE),key=key)
+        return ACTIVE[name],name
+    name=st.selectbox(label,all_schemes.Search_Label.tolist(),key=key)
+    return str(all_schemes.loc[all_schemes.Search_Label==name,"Scheme_Code"].iloc[0]),name
 
-# ==========================================
-# 4. SIDEBAR NAVIGATION
-# ==========================================
+def gauge(p,title="Model Risk Indicator"):
+    f=go.Figure(go.Indicator(mode="gauge+number",value=p*100,number={"suffix":"%"},
+      title={"text":title},gauge={"axis":{"range":[0,100]},"bar":{"color":"#b91c1c" if p>=.6 else "#b45309" if p>=.3 else "#15803d"},
+      "steps":[{"range":[0,30],"color":"#dcfce7"},{"range":[30,60],"color":"#fef3c7"},{"range":[60,100],"color":"#fee2e2"}]}))
+    f.update_layout(height=290,margin=dict(l=10,r=10,t=40,b=5),template="plotly_white")
+    return f
+
+def explain(r):
+    good=[];bad=[]
+    (good if r["ret1y"]>6.5 else bad).append("1Y return is above the 6.5% reference hurdle.")
+    (good if r["sharpe"]>.5 else bad).append("Sharpe is above the 0.50 reference level.")
+    (good if r["dd"]>-12 else bad).append("1Y drawdown is within the -12% reference range.")
+    (good if r["vol"]<18 else bad).append("Annualized volatility is below 18%.")
+    if good: st.markdown("<div class='good'><b>What looks good</b><br>• "+"<br>• ".join(good)+"</div>",unsafe_allow_html=True)
+    if bad: st.markdown("<div class='warn'><b>What to watch</b><br>• "+"<br>• ".join(bad)+"</div>",unsafe_allow_html=True)
+
+# ============================ SIDEBAR ============================
 with st.sidebar:
-    st.markdown("<h2>🛡️️ FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v4.2</p>", unsafe_allow_html=True)
+    st.markdown("## 🛡️ FinShield")
+    st.caption("Universal Mutual Fund Intelligence")
+    page=st.radio("Module",[
+        "🏠 Home","⚔️ Fund Duel","🔍 Fund Intelligence","📊 Advanced Analytics",
+        "⚡ Stress Lab","💼 Paper Portfolio","🧩 Overlap Analyzer",
+        "💰 SIP & Goal Planner","⭐ Watchlist","📁 Historical Dataset","ℹ️ Methodology"])
+    rf=st.number_input("Risk-free rate (%)",0.,15.,6.5,.25)
     st.markdown("---")
-    
-    app_mode = st.radio(
-        "MODULE ROUTING",
-        [
-            "1. Global Stock Crash-Risk Predictor",
-            "2. Technical Telemetry",
-            "3. Mutual Fund Risk Screening",
-            "4. Head-to-Head (H2H) Comparison",
-            "5. Portfolio Overlap Analysis",
-            "6. Paper Trading & AI Ledger"
-        ]
-    )
-    st.markdown("---")
-    st.caption("🟢 Universal yFinance Live Feed: **ACTIVE**")
+    st.success("AMFI loaded") if amfi else st.error("mftool unavailable")
+    st.caption(f"Model: {model_source}")
 
-# ==========================================
-# 5. MODULE EXECUTIONS (VISUALLY ENHANCED)
-# ==========================================
+st.markdown("""<div class="hero"><h1>🛡️ FinShield</h1>
+<p>Live NAV intelligence • risk analytics • fund comparison • stress testing • portfolio overlap • paper trading • SIP planning</p></div>""",unsafe_allow_html=True)
 
-# --- MODULE 1 ---
-if "1." in app_mode:
-    st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Select or search any live global asset ticker from the dropdown feed.</p>", unsafe_allow_html=True)
-    
-    search_col, _ = st.columns([1.5, 1.5])
-    with search_col:
-        selected_ticker_option = st.selectbox("🔍 Select or Search Asset Ticker:", popular_tickers, index=0, key="m1_dropdown")
-        if selected_ticker_option == "Custom Ticker...":
-            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m1_custom")
-            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
+# ============================ HOME ============================
+if page=="🏠 Home":
+    st.subheader("Investor-first mutual fund research")
+    a,b,c,d=st.columns(4)
+    a.metric("AMFI schemes loaded",f"{len(all_schemes):,}")
+    b.metric("Popular benchmark set",len(ACTIVE))
+    c.metric("Analytics", "20+")
+    d.metric("Paper cash",money(st.session_state.cash))
+    st.markdown("### 🚀 Core workflow")
+    st.markdown("""<div class="insight"><b>Identify → Measure → Compare → Stress-test → Check overlap → Plan → Paper-track</b><br>
+    Use the dashboard to understand a fund before deciding whether it deserves further due diligence.</div>""",unsafe_allow_html=True)
+    st.markdown("### ⭐ Benchmark schemes")
+    st.dataframe(pd.DataFrame({"Scheme":list(ACTIVE),"AMFI Code":list(ACTIVE.values())}),use_container_width=True,hide_index=True)
+    st.markdown("### ⚠️ Important")
+    st.warning("FinShield is a research dashboard, not personalized investment advice. Verify the latest official factsheet, portfolio, risk-o-meter, expense ratio, exit load and scheme documents.")
+
+# ============================ DUEL ============================
+elif page=="⚔️ Fund Duel":
+    st.subheader("⚔️ Head-to-Head Scheme Duel")
+    c1,c2=st.columns(2)
+    with c1: ca,la=selector("Fund A","duela")
+    with c2: cb,lb=selector("Fund B","duelb")
+    if st.button("⚔️ Launch Live Duel",type="primary",use_container_width=True):
+        try:
+            with st.spinner("Fetching AMFI histories..."):
+                ra,rb=analyze(ca,rf),analyze(cb,rf)
+            winner=ra if ra["prob"]<rb["prob"] else rb if rb["prob"]<ra["prob"] else None
+            if winner: st.success(f"🏆 Lower model-risk indicator: {clean(winner['name'])} — {winner['prob']*100:.1f}%")
+            else: st.info("⚖️ Equal model-risk indicator.")
+            x,y=st.columns(2)
+            with x: st.plotly_chart(gauge(ra["prob"],"Fund A"),use_container_width=True)
+            with y: st.plotly_chart(gauge(rb["prob"],"Fund B"),use_container_width=True)
+            comp=pd.DataFrame({
+                "Metric":["Category","AMC","NAV","1M Return","1Y Return","3Y CAGR","5Y CAGR","Volatility","Max Drawdown","Sharpe","Sortino","Composite Score","Model Risk"],
+                "Fund A":[ra["category"],ra["amc"],money(ra["nav"]),pc(ra["ret1m"]),pc(ra["ret1y"]),pc(ra["ret3y"]) if np.isfinite(ra["ret3y"]) else "N/A",pc(ra["ret5y"]) if np.isfinite(ra["ret5y"]) else "N/A",f"{ra['vol']:.2f}%",f"{ra['dd']:.2f}%",f"{ra['sharpe']:.2f}",f"{ra['sortino']:.2f}",f"{ra['score']:.2f}",f"{ra['prob']*100:.1f}%"],
+                "Fund B":[rb["category"],rb["amc"],money(rb["nav"]),pc(rb["ret1m"]),pc(rb["ret1y"]),pc(rb["ret3y"]) if np.isfinite(rb["ret3y"]) else "N/A",pc(rb["ret5y"]) if np.isfinite(rb["ret5y"]) else "N/A",f"{rb['vol']:.2f}%",f"{rb['dd']:.2f}%",f"{rb['sharpe']:.2f}",f"{rb['sortino']:.2f}",f"{rb['score']:.2f}",f"{rb['prob']*100:.1f}%"]})
+            st.dataframe(comp,use_container_width=True,hide_index=True)
+            z=pd.concat([ra["navdf"].nav.rename("Fund A")/ra["navdf"].nav.iloc[0]*100,
+                         rb["navdf"].nav.rename("Fund B")/rb["navdf"].nav.iloc[0]*100],axis=1)
+            st.plotly_chart(px.line(z,title="Normalized Growth of ₹100"),use_container_width=True)
+            q,w=st.columns(2)
+            with q: st.markdown(f"**{clean(ra['name'])}**"); explain(ra)
+            with w: st.markdown(f"**{clean(rb['name'])}**"); explain(rb)
+        except Exception as e: st.error(str(e))
+
+# ============================ SINGLE ============================
+elif page=="🔍 Fund Intelligence":
+    st.subheader("🔍 Single Scheme Intelligence")
+    code,name=selector("Select scheme","single")
+    if st.button("🚀 Analyze Live Scheme",type="primary",use_container_width=True):
+        try:
+            with st.spinner("Analyzing NAV history..."): r=analyze(code,rf)
+            st.markdown(f"**{clean(r['name'])}** · {r['category']} · {r['amc']} · NAV {money(r['nav'])}")
+            st.success(status(r["prob"])+" — "+f"model indicator {r['prob']*100:.1f}%") if r["prob"]<.3 else st.warning(status(r["prob"])+" — "+f"model indicator {r['prob']*100:.1f}%") if r["prob"]<.6 else st.error(status(r["prob"])+" — "+f"model indicator {r['prob']*100:.1f}%")
+            a,b,c,d,e=st.columns(5)
+            a.metric("1M",pc(r["ret1m"]));b.metric("1Y",pc(r["ret1y"]));c.metric("3Y CAGR",pc(r["ret3y"]) if np.isfinite(r["ret3y"]) else "N/A");d.metric("Sharpe",f"{r['sharpe']:.2f}");e.metric("Max DD",f"{r['dd']:.1f}%")
+            t1,t2,t3,t4=st.tabs(["📈 Performance","🛡️ Risk","🤖 AI Score","📄 Factsheet"])
+            with t1:
+                st.plotly_chart(px.line(r["navdf"],x=r["navdf"].index,y="nav",title="Historical NAV"),use_container_width=True)
+                dd=(r["navdf"].nav/r["navdf"].nav.cummax()-1)*100
+                st.plotly_chart(px.area(x=dd.index,y=dd.values,title="Full-history Drawdown"),use_container_width=True)
+            with t2:
+                x,y,z=st.columns(3);x.metric("Annualized Volatility",f"{r['vol']:.2f}%");y.metric("30D Volatility",f"{r['vol30']:.2f}%");z.metric("Sortino",f"{r['sortino']:.2f}")
+                explain(r)
+            with t3:
+                x,y=st.columns([1,1.5])
+                with x:st.plotly_chart(gauge(r["prob"]),use_container_width=True)
+                with y:
+                    st.metric("Composite Health Score",f"{r['score']:.2f}")
+                    st.dataframe(pd.DataFrame({"Feature":list(r["features"]),"Value":list(r["features"].values())}),use_container_width=True,hide_index=True)
+                    st.caption("The model indicator is a research signal, not a guarantee of fund distress/failure.")
+            with t4:
+                html=f"""<html><body><h1>AlphaShield Factsheet</h1><h2>{clean(r['name'])}</h2>
+                <p>{r['category']} | {r['amc']} | NAV {money(r['nav'])}</p>
+                <table border=1 cellpadding=8><tr><th>Metric</th><th>Value</th></tr>
+                <tr><td>1Y Return</td><td>{pc(r['ret1y'])}</td></tr><tr><td>3Y CAGR</td><td>{pc(r['ret3y']) if np.isfinite(r['ret3y']) else 'N/A'}</td></tr>
+                <tr><td>Volatility</td><td>{r['vol']:.2f}%</td></tr><tr><td>Max Drawdown</td><td>{r['dd']:.2f}%</td></tr>
+                <tr><td>Sharpe</td><td>{r['sharpe']:.2f}</td></tr><tr><td>Sortino</td><td>{r['sortino']:.2f}</td></tr>
+                <tr><td>Composite Score</td><td>{r['score']:.2f}</td></tr><tr><td>Model Risk</td><td>{r['prob']*100:.1f}%</td></tr></table>
+                <p>This is a research document, not investment advice.</p></body></html>"""
+                st.download_button("📥 Download HTML Factsheet",html,f"AlphaShield_{code}.html","text/html",type="primary")
+
+# ============================ ADVANCED ============================
+elif page=="📊 Advanced Analytics":
+    st.subheader("📊 Advanced Analytics")
+    code,name=selector("Select scheme","advanced")
+    if st.button("Run Advanced Analytics",type="primary",use_container_width=True):
+        try:
+            r=analyze(code,rf); nav=r["navdf"].nav; ret=nav.pct_change().dropna()
+            a,b,c,d=st.columns(4);a.metric("Observations",f"{len(nav):,}");b.metric("Full-history CAGR",pc(((nav.iloc[-1]/nav.iloc[0])**(365.25/((nav.index[-1]-nav.index[0]).days))-1)*100));c.metric("Best day",pc(ret.max()*100));d.metric("Worst day",pc(ret.min()*100))
+            x,y,z=st.tabs(["Rolling Returns","Rolling Risk","Distribution"])
+            with x:
+                q=pd.DataFrame({"1Y":(nav/nav.shift(252)-1)*100,"3Y":(nav/nav.shift(756)-1)*100})
+                st.plotly_chart(px.line(q,title="Rolling Returns"),use_container_width=True)
+            with y:
+                q=ret.rolling(63).std()*np.sqrt(252)*100
+                st.plotly_chart(px.line(q,title="63D Annualized Volatility"),use_container_width=True)
+                dd=(nav/nav.cummax()-1)*100
+                st.plotly_chart(px.area(x=dd.index,y=dd.values,title="Drawdown"),use_container_width=True)
+            with z:
+                st.plotly_chart(px.histogram(ret*100,nbins=60,title="Daily Return Distribution"),use_container_width=True)
+                st.dataframe(ret.mul(100).quantile([.01,.05,.25,.5,.75,.95,.99]).rename("Return %").to_frame(),use_container_width=True)
+        except Exception as e:st.error(str(e))
+
+# ============================ STRESS ============================
+elif page=="⚡ Stress Lab":
+    st.subheader("⚡ Crisis & Macro Shock Stress Lab")
+    code,name=selector("Select scheme","stress")
+    try:
+        r=analyze(code,rf)
+        shock=st.slider("Hypothetical market shock (%)",-60,-5,-20,5)
+        sensitivity=st.slider("Sensitivity multiplier",.5,2.,1.,.05)
+        loss=shock*(r["vol"]/15)*sensitivity; snav=max(0,r["nav"]*(1+loss/100))
+        a,b,c=st.columns(3);a.metric("Current NAV",money(r["nav"]));b.metric("Scenario loss",f"{loss:.2f}%");c.metric("Scenario NAV",money(snav))
+        nav=r["navdf"].nav
+        covid=nav.loc["2020-01-01":"2020-05-31"];rate=nav.loc["2022-01-01":"2022-06-30"]
+        a,b,c=st.columns(3)
+        a.metric("COVID window",f"{(covid.min()/covid.max()-1)*100:.1f}%" if len(covid)>10 else "N/A")
+        b.metric("2022 rate window",f"{(rate.min()/rate.max()-1)*100:.1f}%" if len(rate)>10 else "N/A")
+        c.metric("Current 1Y max DD",f"{r['dd']:.1f}%")
+        days=np.arange(31);curve=r["nav"]*(1+loss/100*days/30)
+        st.plotly_chart(px.line(pd.DataFrame({"Day":days,"Scenario NAV":curve}),x="Day",y="Scenario NAV",title="30-Day Shock Illustration"),use_container_width=True)
+        st.warning("Scenario output is a sensitivity exercise, not a forecast.")
+    except Exception as e:st.error(str(e))
+
+# ============================ PAPER PORTFOLIO ============================
+elif page=="💼 Paper Portfolio":
+    st.subheader("💼 Paper Trading & AI Proof Ledger")
+    rows=[];total_cost=total_value=0
+    for p in st.session_state.portfolio:
+        try:
+            r=analyze(p["code"],rf);value=p["units"]*r["nav"]
+            total_cost+=p["invested"];total_value+=value
+            rows.append({"Scheme":clean(r["name"]),"Category":p["category"],"Invested":p["invested"],"Current Value":value,"P&L":value-p["invested"],"P&L %":(value/p["invested"]-1)*100,"Units":p["units"],"Buy NAV":p["buy_nav"],"Live NAV":r["nav"],"AI Risk at Buy":p["risk"]*100,"Status":status(r["prob"])})
+        except Exception:pass
+    cash=st.session_state.cash
+    a,b,c,d=st.columns(4);a.metric("Paper Cash",money(cash));b.metric("Invested",money(total_cost));c.metric("Current Value",money(total_value),f"{total_value-total_cost:+,.2f} P&L");d.metric("Net Worth",money(cash+total_value))
+    code,name=selector("Scheme to buy","trade")
+    amt=st.number_input("Investment amount (₹)",1000.,max(1000.,cash),min(10000.,cash),1000.)
+    if st.button("📥 Buy Units at Live NAV",type="primary",use_container_width=True):
+        if amt>cash:st.error("Insufficient paper cash.")
         else:
-            ticker = selected_ticker_option
+            try:
+                r=analyze(code,rf);units=amt/r["nav"]
+                st.session_state.portfolio.append({"time":datetime.now().strftime("%d-%b-%Y %H:%M"),"code":code,"name":r["name"],"category":r["category"],"buy_nav":r["nav"],"units":units,"invested":amt,"risk":r["prob"]})
+                st.session_state.cash-=amt;st.success(f"Bought {units:.3f} units of {clean(r['name'])}.");st.rerun()
+            except Exception as e:st.error(str(e))
+    if rows:
+        df=pd.DataFrame(rows);st.dataframe(df,use_container_width=True,hide_index=True)
+        st.download_button("📥 Download Ledger CSV",df.to_csv(index=False),"AlphaShield_Portfolio.csv","text/csv")
+    else:st.info("No paper positions yet.")
+    if st.button("🔄 Reset Paper Portfolio"):st.session_state.cash=100000.;st.session_state.portfolio=[];st.rerun()
 
-    df = fetch_live_data(ticker)
-    
-    if not df.empty and len(df) > 5:
-        col_target, col_chart = st.columns([1, 2.5])
-        with col_target:
-            ltp = float(df['Close'].iloc[-1])
-            prev_close = float(df['Close'].iloc[-2])
-            change_pct = ((ltp - prev_close) / prev_close) * 100
-            risk_score = round(calculate_crash_risk(df), 1)
-            
-            cutoff = 30.0
-            risk_color = "#00E676" if risk_score < cutoff else "#FF1744"
-            risk_badge = '<span class="badge-safe">SAFE (LOW RISK)</span>' if risk_score < cutoff else '<span class="badge-danger">DANGER (HIGH RISK)</span>'
+# ============================ OVERLAP ============================
+elif page=="🧩 Overlap Analyzer":
+    st.subheader("🧩 Portfolio Overlap & Hidden Concentration")
+    a,b=st.columns(2)
+    names=list(HOLDINGS)
+    with a:f1=st.selectbox("Fund 1",names,0)
+    with b:f2=st.selectbox("Fund 2",names,1)
+    h1,h2=HOLDINGS[f1],HOLDINGS[f2]
+    common=set(h1)&set(h2);stocks=set(h1)|set(h2)
+    overlap=sum(min(h1.get(s,0),h2.get(s,0)) for s in common)
+    combo={s:(h1.get(s,0)+h2.get(s,0))/2 for s in stocks}
+    a,b,c,d=st.columns(4);a.metric("Overlap",f"{overlap:.1f}%");b.metric("Common companies",len(common));c.metric("Tracked companies",len(stocks));d.metric("Largest effective exposure",f"{max(combo.values()):.1f}%")
+    st.warning("High overlap can create an illusion of diversification.") if overlap>35 else st.info("Moderate overlap — review common holdings.") if overlap>15 else st.success("Low tracked overlap.")
+    df=pd.DataFrame([{"Company":s,"Fund 1 %":h1.get(s,0),"Fund 2 %":h2.get(s,0),"Effective 50:50 %":combo[s],"Common":"Yes" if s in common else "No"} for s in stocks]).sort_values("Effective 50:50 %",ascending=False)
+    critical=df[df["Effective 50:50 %"]>=6]
+    if not critical.empty:st.dataframe(critical,use_container_width=True,hide_index=True)
+    st.plotly_chart(px.bar(df.head(15),x="Company",y=["Fund 1 %","Fund 2 %"],barmode="group",title="Top Underlying Companies"),use_container_width=True)
+    with st.expander("Complete holdings table"):st.dataframe(df,use_container_width=True,hide_index=True)
 
-            st.markdown(f"""
-            <div class="blue-card" style="border-left-color: {risk_color};">
-                <p style="font-size: 1rem; color: #94A3B8 !important;">{ticker} LIVE MARKET PRICE</p>
-                <h2 style="font-size: 2.2rem;">₹{ltp:,.2f} <span style="font-size: 1rem; color: {'#00E676' if change_pct > 0 else '#FF1744'};">({change_pct:+.2f}%)</span></h2>
-                <hr style="border-color: #1E293B;">
-                <p style="font-size: 1rem; color: #94A3B8 !important;">30-DAY CRASH PROBABILITY</p>
-                <h2 style="font-size: 3rem; color: {risk_color} !important;">{risk_score}%</h2>
-                <div style="margin-top: 8px;">{risk_badge}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with col_chart:
-            fig_candle = go.Figure(data=[go.Candlestick(
-                x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-                increasing_line_color='#00E676', decreasing_line_color='#FF1744'
-            )])
-            fig_candle.update_layout(title=f"Live Price Action - {ticker}", margin=dict(l=20, r=20, t=40, b=20), height=350, xaxis_rangeslider_visible=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_candle, use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("### ⚙️ Feature Importance (SHAP)")
-            features = pd.DataFrame({'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'], 'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]}).sort_values(by='Weight', ascending=True)
-            fig_bar = px.bar(features, x='Weight', y='Feature', orientation='h', color='Weight', color_continuous_scale='Blues')
-            fig_bar.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        with c2:
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number", value=risk_score,
-                number={'suffix': "%", 'font': {'size': 40, 'color': risk_color}},
-                title={'text': f"{ticker} Distress Gauge", 'font': {'size': 16, 'color': 'gray'}},
-                gauge={'axis': {'range': [0, 100], 'tickwidth': 1}, 'bar': {'color': risk_color, 'thickness': 0.25}, 'bgcolor': "#F3F4F6", 'borderwidth': 0, 'steps': [{'range': [0, 30], 'color': "rgba(0, 230, 118, 0.1)"}, {'range': [30, 100], 'color': "rgba(255, 23, 68, 0.1)"}]}
-            ))
-            fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=10))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+# ============================ SIP ============================
+elif page=="💰 SIP & Goal Planner":
+    st.subheader("💰 SIP, Lump-Sum & Goal Planner")
+    mode=st.radio("Mode",["SIP corpus","Lump sum","Goal-first"],horizontal=True)
+    if mode=="SIP corpus":
+        a,b,c=st.columns(3);monthly=a.number_input("Monthly SIP ₹",500.,1e6,10000.,500.);years=b.slider("Years",1,40,10);ret=c.number_input("Expected return %",-10.,30.,12.,.5)
+        out=[]
+        for rr in [ret-3,ret,ret+3]:
+            m=(1+rr/100)**(1/12)-1;n=years*12;fv=monthly*n if m==0 else monthly*((1+m)**n-1)/m*(1+m)
+            out.append({"Scenario":f"{rr:.1f}%","Invested":monthly*n,"Corpus":fv,"Gain":fv-monthly*n})
+        st.dataframe(pd.DataFrame(out).style.format("{:,.0f}",subset=["Invested","Corpus","Gain"]),use_container_width=True,hide_index=True)
+        st.plotly_chart(px.bar(pd.DataFrame(out),x="Scenario",y="Corpus",title="Scenario Corpus"),use_container_width=True)
+    elif mode=="Lump sum":
+        a,b,c=st.columns(3);p=a.number_input("Initial ₹",1000.,1e8,100000.,5000.);years=b.slider("Years",1,40,10);ret=c.number_input("Return %",-10.,30.,12.,.5)
+        out=[{"Scenario":f"{rr:.1f}%","Future Value":p*(1+rr/100)**years,"Gain":p*((1+rr/100)**years-1)} for rr in [ret-3,ret,ret+3]]
+        st.dataframe(pd.DataFrame(out).style.format("{:,.0f}",subset=["Future Value","Gain"]),use_container_width=True,hide_index=True)
     else:
-        st.error(f"Unable to pull live market data for symbol '{ticker}'.")
+        goal=st.number_input("Target ₹",10000.,1e8,2500000.,50000.);years=st.slider("Years",1,40,10);ret=st.number_input("Expected return %",-10.,30.,12.,.5)
+        n=years*12;m=(1+ret/100)**(1/12)-1;required=goal/n if m==0 else goal/(((1+m)**n-1)/m*(1+m))
+        st.metric("Approx. required monthly SIP",money(required))
+        out=[]
+        for rr in [ret-3,ret,ret+3]:
+            mm=(1+rr/100)**(1/12)-1;req=goal/n if mm==0 else goal/(((1+mm)**n-1)/mm*(1+mm));out.append({"Return":f"{rr:.1f}%","Required SIP":req})
+        st.dataframe(pd.DataFrame(out).style.format({"Required SIP":"₹{:,.0f}"}),use_container_width=True,hide_index=True)
 
-# --- MODULE 2: TECHNICAL TELEMETRY ---
-elif "2." in app_mode:
-    st.markdown("<h1>📊 Technical Telemetry & Momentum Health</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect interactive live moving averages, RSI momentum, and MACD divergence telemetry.</p>", unsafe_allow_html=True)
-    
-    search_col, _ = st.columns([1.5, 1.5])
-    with search_col:
-        selected_ticker_option = st.selectbox("🔍 Select or Search Ticker for Telemetry:", popular_tickers, index=0, key="m2_dropdown")
-        if selected_ticker_option == "Custom Ticker...":
-            raw_ticker = st.text_input("Enter Custom Ticker Symbol:", value="RELIANCE.NS", key="m2_custom")
-            ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
-        else:
-            ticker = selected_ticker_option
+# ============================ WATCHLIST ============================
+elif page=="⭐ Watchlist":
+    st.subheader("⭐ Investor Watchlist")
+    code,name=selector("Scheme to add","watch")
+    if st.button("⭐ Add to Watchlist",type="primary"):
+        if code not in [x["code"] for x in st.session_state.watchlist]:
+            st.session_state.watchlist.append({"code":code,"name":name});st.success("Added.")
+        else:st.info("Already on watchlist.")
+    rows=[]
+    for p in st.session_state.watchlist:
+        try:
+            r=analyze(p["code"],rf);rows.append({"Scheme":clean(r["name"]),"Category":r["category"],"NAV":r["nav"],"1Y Return":r["ret1y"],"Volatility":r["vol"],"Max DD":r["dd"],"Sharpe":r["sharpe"],"Model Risk":r["prob"]*100,"Status":status(r["prob"])})
+        except Exception:rows.append({"Scheme":clean(p["name"]),"Status":"Unavailable"})
+    if rows:st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+    else:st.info("Watchlist is empty.")
+    if st.button("🗑️ Clear Watchlist"):st.session_state.watchlist=[];st.rerun()
 
-    df_raw = fetch_live_data(ticker)
-    if not df_raw.empty and len(df_raw) > 30:
-        df = compute_technical_indicators(df_raw)
-        latest_rsi, latest_macd, latest_sma20, latest_close = df['RSI'].iloc[-1], df['MACD'].iloc[-1], df['SMA_20'].iloc[-1], df['Close'].iloc[-1]
-        
-        # Visual Health Scorecards
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            rsi_status = "Overbought ⚡" if latest_rsi > 70 else ("Oversold 🛡️" if latest_rsi < 30 else "Neutral ⚖️")
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #3B82F6; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">RSI MOMENTUM (14)</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{latest_rsi:.2f}</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #3B82F6;">{rsi_status}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with m2:
-            macd_status = "Bullish Momentum 🚀" if latest_macd > 0 else "Bearish Pressure 📉"
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #10B981; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">MACD DIVERGENCE</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{latest_macd:.2f}</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #10B981;">{macd_status}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with m3:
-            trend_status = "Bullish Trend 📈" if latest_close > latest_sma20 else "Bearish Trend 📉"
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #8B5CF6; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">SMA 20 VS PRICE</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">₹{latest_close:,.2f}</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #8B5CF6;">{trend_status}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        fig_ma = go.Figure()
-        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['Close'], name='Close Price', line=dict(color='#0A2540', width=2)))
-        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_20'], name='20 SMA', line=dict(color='#00E676', width=1.5)))
-        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_50'], name='50 SMA', line=dict(color='#FF1744', width=1.5)))
-        fig_ma.update_layout(title=f"{ticker} - Moving Average Crossover", height=350, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_ma, use_container_width=True)
-        
-        col_rsi, col_macd = st.columns(2)
-        with col_rsi:
-            fig_rsi = px.line(df, x='Date', y='RSI', title=f"{ticker} - RSI Momentum")
-            fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
-            fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
-            fig_rsi.update_layout(height=260, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_rsi, use_container_width=True)
-        with col_macd:
-            fig_macd = go.Figure()
-            fig_macd.add_trace(go.Scatter(x=df['Date'], y=df['MACD'], name='MACD', line=dict(color='#0A2540')))
-            fig_macd.add_trace(go.Scatter(x=df['Date'], y=df['Signal_Line'], name='Signal', line=dict(color='#FF1744')))
-            fig_macd.update_layout(title=f"{ticker} - MACD Divergence", height=260, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_macd, use_container_width=True)
+# ============================ HISTORICAL ============================
+elif page=="📁 Historical Dataset":
+    st.subheader("📁 Historical Research Dataset")
+    funds=pd.DataFrame(bundle.get("sample_funds",[]))
+    if funds.empty:
+        st.info("No sample_funds table exists in dashboard_model_bundle.pkl. Live AMFI modules remain available.")
     else:
-        st.error("Could not load historical indicator data.")
+        name=st.selectbox("Historical fund",funds.Fund_Name.astype(str).tolist());row=funds[funds.Fund_Name==name].iloc[0]
+        X=pd.DataFrame([[float(row.get(f,0)) for f in features]],columns=features)
+        p=float(model.predict_proba(X)[0,1])
+        st.metric("Historical Model Risk",f"{p*100:.1f}%")
+        st.dataframe(pd.DataFrame({"Feature":features,"Value":[row.get(f,0) for f in features]}),use_container_width=True,hide_index=True)
 
-# --- MODULE 3: MUTUAL FUND RISK SCREENING & SEARCH ---
-elif "3." in app_mode:
-    st.markdown("<h1>🛡️ Mutual Fund Risk Screening & Search Terminal</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search schemes instantly, filter by category dropdown, or look up live mutual fund/ETF tickers.</p>", unsafe_allow_html=True)
-    
-    search_col1, search_col2 = st.columns([2, 1])
-    with search_col1:
-        fund_search_options = ["All Funds"] + list(mf_database['Fund Name'].unique()) + ["Custom Search..."]
-        selected_mf_dropdown = st.selectbox("🔍 Search or Select Fund Scheme:", fund_search_options, key="mf_dropdown_search")
-        
-        if selected_mf_dropdown == "Custom Search...":
-            search_query = st.text_input("Enter Fund Name Keyword:", value="", key="mf_custom_search")
-        elif selected_mf_dropdown != "All Funds":
-            search_query = selected_mf_dropdown
-        else:
-            search_query = ""
+# ============================ METHODOLOGY ============================
+else:
+    st.subheader("ℹ️ Methodology & Responsible Use")
+    st.markdown("""
+    ### Core metrics
+    - **1Y Return:** latest NAV versus roughly 252 observations earlier.
+    - **3Y/5Y CAGR:** annualized growth over the available history.
+    - **Volatility:** daily-return standard deviation annualized using √252.
+    - **Maximum Drawdown:** largest fall from a running NAV peak.
+    - **Sharpe:** (1Y return − risk-free rate) / annualized volatility.
+    - **Sortino:** return relative to downside deviation.
+    - **Composite Score:** bounded dashboard score combining return, volatility, drawdown and Sharpe.
+    - **Overlap:** Σ minimum weight of each common company between two portfolios.
+    ### Model
+    If `dashboard_model_bundle.pkl` exists, its model/features are used. Otherwise a small
+    synthetic fallback model keeps the application functional. **The fallback is not a
+    production investment model.** A production version should use properly labeled historical
+    observations, train/validation/test splits, leakage controls, calibration and out-of-sample
+    evaluation.
+    ### Investor safeguards
+    Expense ratio, exit load, tax, benchmark tracking, fund manager changes, portfolio turnover,
+    AUM, liquidity, risk-o-meter and current holdings should be verified separately before investing.
+    Historical performance and model scores do not guarantee future returns.
+    """)
 
-    with search_col2:
-        category_filter = st.selectbox("Filter by Category", ["All Categories"] + list(mf_database['Category'].unique()), key="mf_cat_filter")
-        
-    filtered_df = mf_database.copy()
-    if search_query:
-        filtered_df = filtered_df[
-            filtered_df['Fund Name'].str.contains(search_query, case=False, na=False) |
-            filtered_df['Category'].str.contains(search_query, case=False, na=False)
-        ]
-    if category_filter != "All Categories":
-        filtered_df = filtered_df[filtered_df['Category'] == category_filter]
-        
-    # Styled Summary Cards
-    if not filtered_df.empty:
-        top_fund = filtered_df.loc[filtered_df['1Y Return (%)'].idxmax()]
-        avg_return = filtered_df['1Y Return (%)'].mean()
-        avg_expense = filtered_df['Expense Ratio (%)'].mean()
-        
-        mc1, mc2, mc3 = st.columns(3)
-        with mc1:
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #0A2540; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">FILTERED SCHEMES</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{len(filtered_df)}</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #0A2540;">Category: {category_filter}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with mc2:
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #059669; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">TOP 1Y PERFORMER</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{top_fund['Fund Name']}</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #059669;">+{top_fund['1Y Return (%)']}% Return</p>
-            </div>
-            """, unsafe_allow_html=True)
-        with mc3:
-            st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #D97706; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">AVG EXPENSE RATIO</p>
-                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{avg_expense:.2f}%</h3>
-                <p style="margin: 4px 0 0 0; font-weight: bold; color: #D97706;">Avg Return: {avg_return:.1f}%</p>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown("---")
-
-    st.markdown(f"### 📋 Institutional Screener Database")
-    st.dataframe(filtered_df, hide_index=True, use_container_width=True)
-    
-    with st.expander("🌐 Lookup Live Custom Mutual Fund / ETF Ticker (yfinance)"):
-        custom_mf_options = ["NIFTYBEES.NS", "SETFNN50.NS", "JUNIORBEES.NS", "BANKBEES.NS", "Custom Ticker..."]
-        selected_mf_ticker_opt = st.selectbox("Select ETF/Fund Ticker:", custom_mf_options, key="custom_mf_dropdown")
-        if selected_mf_ticker_opt == "Custom Ticker...":
-            custom_mf_ticker = st.text_input("Enter Ticker Symbol:", value="NIFTYBEES.NS", key="custom_mf_input")
-        else:
-            custom_mf_ticker = selected_mf_ticker_opt
-
-        if st.button("Fetch Live Scheme Data"):
-            mf_live_df = fetch_live_data(custom_mf_ticker)
-            if not mf_live_df.empty:
-                current_val = float(mf_live_df['Close'].iloc[-1])
-                ret_1yr = ((current_val / float(mf_live_df['Close'].iloc[0])) - 1) * 100 if len(mf_live_df) > 1 else 0.0
-                st.success(f"Successfully fetched **{custom_mf_ticker}** | Latest NAV/Price: ₹{current_val:,.2f} | Period Return: {ret_1yr:+.2f}%")
-                
-                fig_mf_live = px.line(mf_live_df, x='Date', y='Close', title=f"Live Price Action - {custom_mf_ticker}")
-                fig_mf_live.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_mf_live, use_container_width=True)
-            else:
-                st.error(f"Could not retrieve ticker '{custom_mf_ticker}'. Please check the symbol.")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_scatter = px.scatter(filtered_df if not filtered_df.empty else mf_database, x='Risk Score', y='1Y Return (%)', size='Alpha', color='Category', hover_name='Fund Name', title="Risk vs Return Matrix (Bubble size = Alpha)", color_discrete_sequence=px.colors.qualitative.Bold)
-        fig_scatter.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_scatter, use_container_width=True)
-    with col2:
-        fig_bar = px.bar(filtered_df if not filtered_df.empty else mf_database, x='Fund Name', y='Expense Ratio (%)', color='Category', title="Expense Ratio Comparison", color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig_bar.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-# --- MODULE 4: HEAD-TO-HEAD COMPARISON ---
-elif "4." in app_mode:
-    st.markdown("<h1>⚔️ Head-to-Head (H2H) Fund & Scheme Comparison</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Select any two mutual fund schemes from the dropdown menu for direct comparative analysis.</p>", unsafe_allow_html=True)
-    
-    c1, c2 = st.columns(2)
-    fund1_name = c1.selectbox("Select Fund Scheme A", mf_database['Fund Name'], index=0, key="h2h_f1")
-    fund2_name = c2.selectbox("Select Fund Scheme B", mf_database['Fund Name'], index=1, key="h2h_f2")
-    
-    d1 = mf_database[mf_database['Fund Name'] == fund1_name].iloc[0]
-    d2 = mf_database[mf_database['Fund Name'] == fund2_name].iloc[0]
-    
-    # Automated Winner Calculation
-    score1 = (d1['1Y Return (%)'] * 0.4) + (d1['Alpha'] * 3) - (d1['Expense Ratio (%)'] * 10)
-    score2 = (d2['1Y Return (%)'] * 0.4) + (d2['Alpha'] * 3) - (d2['Expense Ratio (%)'] * 10)
-    winner = fund1_name if score1 >= score2 else fund2_name
-    
-    st.markdown(f"""
-    <div style="background: white; padding: 1rem 1.5rem; border-radius: 10px; border: 2px dashed #0A2540; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h3 style="margin: 0; color: #0A2540;">🏆 Automated Comparative Winner</h3>
-            <p style="margin: 0; color: #64748B;">Based on risk-adjusted return, alpha generation, and cost efficiency.</p>
-        </div>
-        <div><span class="badge-winner">🥇 {winner}</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    colA, colB = st.columns([1, 1.5])
-    with colA:
-        st.markdown("### Comparative Metrics Matrix")
-        comp_df = pd.DataFrame({'Metric': mf_database.columns[2:], fund1_name: d1[2:].values, fund2_name: d2[2:].values})
-        st.dataframe(comp_df, hide_index=True, use_container_width=True)
-    with colB:
-        fig_radar = go.Figure()
-        categories = ['1Y Return', 'Alpha', 'Beta (Inv)', 'Risk Efficiency', 'Cost Efficiency']
-        val1 = [d1['1Y Return (%)']*2, d1['Alpha']*10, (2-d1['Beta'])*50, 100-d1['Risk Score'], (2-d1['Expense Ratio (%)'])*50]
-        val2 = [d2['1Y Return (%)']*2, d2['Alpha']*10, (2-d2['Beta'])*50, 100-d2['Risk Score'], (2-d2['Expense Ratio (%)'])*50]
-        fig_radar.add_trace(go.Scatterpolar(r=val1, theta=categories, fill='toself', name=fund1_name, line_color='#0A2540'))
-        fig_radar.add_trace(go.Scatterpolar(r=val2, theta=categories, fill='toself', name=fund2_name, line_color='#00E676'))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=False)), height=340, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_radar, use_container_width=True)
-
-# --- MODULE 5 ---
-elif "5." in app_mode:
-    st.markdown("<h1>🗂️ Portfolio Overlap & Asset Allocation Analysis</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and interactive risk-return asset allocations.</p>", unsafe_allow_html=True)
-    
-    col_alloc, col_donut = st.columns([1.5, 1.2])
-    
-    with col_alloc:
-        st.markdown("### Custom Portfolio Weighting")
-        w_equity = st.slider("Large Cap Equities (%)", 0, 100, 50)
-        w_mid = st.slider("Mid & Small Cap (%)", 0, 100, 30)
-        w_debt = st.slider("Fixed Income / Debt (%)", 0, 100, 20)
-        
-        total_w = w_equity + w_mid + w_debt
-        if total_w != 100:
-            st.warning(f"Total allocation is {total_w}%. Recommended total is exactly 100%.")
-        else:
-            st.success("Allocation perfectly balanced.")
-            
-        # Interactive Risk-Return Projection Metric
-        expected_return = (w_equity * 0.14) + (w_mid * 0.18) + (w_debt * 0.07)
-        expected_volatility = (w_equity * 0.12) + (w_mid * 0.22) + (w_debt * 0.04)
-        
-        st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #10B981; margin-top: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-            <p style="color: #64748B; margin: 0; font-size: 0.9rem;">PORTFOLIO SIMULATION METRICS</p>
-            <h4 style="color: #0F172A; margin: 4px 0;">Expected Annual Return: <span style="color: #059669;">+{expected_return:.2f}%</span></h4>
-            <h4 style="color: #0F172A; margin: 4px 0;">Projected Portfolio Volatility: <span style="color: #D97706;">{expected_volatility:.2f}%</span></h4>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col_donut:
-        alloc_df = pd.DataFrame({'Asset Class': ['Large Cap', 'Mid/Small Cap', 'Debt'], 'Weight': [w_equity, w_mid, w_debt]})
-        fig_donut = px.pie(alloc_df, names='Asset Class', values='Weight', hole=0.5, title="Portfolio Allocation Breakdown", color_discrete_sequence=['#0A2540', '#00E676', '#94A3B8'])
-        fig_donut.update_layout(height=320, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_donut, use_container_width=True)
-
-# --- MODULE 6: PAPER TRADING & AI LEDGER ---
-elif "6." in app_mode:
-    st.markdown("<h1>📋 Paper Trading & AI Ledger</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking and dropdown asset selection.</p>", unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div class="blue-card" style="border-left-color: #00E676;">
-        <p style="font-size: 1rem; color: #94A3B8 !important;">AVAILABLE LIQUID CAPITAL</p>
-        <h2 style="font-size: 2.5rem; color: #00E676 !important;">₹{st.session_state.cash_balance:,.2f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col_trade, col_ledger = st.columns([1, 1.5])
-    
-    with col_trade:
-        st.markdown("### Execute Simulation Order")
-        selected_trade_opt = st.selectbox("Select Asset Ticker", popular_tickers, index=0, key="trade_dropdown")
-        if selected_trade_opt == "Custom Ticker...":
-            trade_ticker = st.text_input("Enter Ticker Symbol:", value="RELIANCE.NS", key="trade_custom").strip().upper()
-        else:
-            trade_ticker = selected_trade_opt
-
-        trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
-        shares = st.number_input("Quantity", min_value=1, max_value=10000, value=10)
-        
-        if st.button("Submit Order to Ledger", use_container_width=True):
-            live_df = fetch_live_data(trade_ticker)
-            if not live_df.empty:
-                exec_price = float(live_df['Close'].iloc[-1])
-                total_cost = exec_price * shares
-                
-                if "BUY" in trade_type:
-                    if st.session_state.cash_balance >= total_cost:
-                        st.session_state.cash_balance -= total_cost
-                        st.session_state.trade_ledger.insert(0, {
-                            'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'Ticker': trade_ticker,
-                            'Action': 'BUY',
-                            'Qty': shares,
-                            'Exec Price (₹)': round(exec_price, 2),
-                            'Total (₹)': round(total_cost, 2)
-                        })
-                        st.success(f"Executed BUY for {shares}x {trade_ticker} at ₹{exec_price:,.2f}!")
-                        st.rerun()
-                    else:
-                        st.error("Insufficient available liquid cash balance for this order!")
-                else:
-                    st.session_state.cash_balance += total_cost
-                    st.session_state.trade_ledger.insert(0, {
-                        'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                        'Ticker': trade_ticker,
-                        'Action': 'SELL',
-                        'Qty': shares,
-                        'Exec Price (₹)': round(exec_price, 2),
-                        'Total (₹)': round(total_cost, 2)
-                    })
-                    st.success(f"Executed SELL for {shares}x {trade_ticker} at ₹{exec_price:,.2f}!")
-                    st.rerun()
-            else:
-                st.error(f"Could not fetch live price for '{trade_ticker}' to execute order.")
-        
-    with col_ledger:
-        st.markdown("### Active Execution Ledger")
-        if len(st.session_state.trade_ledger) > 0:
-            ledger_df = pd.DataFrame(st.session_state.trade_ledger)
-            st.dataframe(ledger_df, hide_index=True, use_container_width=True)
-            if st.button("Clear Ledger History"):
-                st.session_state.trade_ledger = []
-                st.session_state.cash_balance = 1000000.0
-                st.rerun()
-        else:
-            st.info("No active trades executed yet in this session. Submit an order from the left panel to populate the live ledger.")
+st.markdown("""<div class="note">🛡️ FinShield is an analytical/research dashboard, not a SEBI-registered investment adviser.
+Verify the latest official scheme documents before investing.</div>""",unsafe_allow_html=True)
