@@ -27,11 +27,69 @@ import os
 from mftool import Mftool
 
 st.set_page_config(
-    page_title="AlphaShield | NIFTY50 Stock & Mutual Fund Intelligence",
+    page_title="AlphaShield | Institutional Multi-Asset Intelligence",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ----------------- PROFESSIONAL TRADING TERMINAL CSS (DARK BLUE THEME) -----------------
+st.markdown("""
+<style>
+    /* Main App Background & Font */
+    .stApp {
+        background-color: #070d1b;
+        color: #e2e8f0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #0b1329;
+        border-right: 1px solid #1e293b;
+    }
+    
+    /* Professional Metric & Risk Cards */
+    .risk-card-red {
+        background: linear-gradient(135deg, #450a0a 0%, #1e1b4b 100%);
+        border: 1px solid #dc2626;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 10px 15px -3px rgba(220, 38, 38, 0.2);
+        margin-bottom: 20px;
+    }
+    .risk-card-yellow {
+        background: linear-gradient(135deg, #422006 0%, #1e1b4b 100%);
+        border: 1px solid #d97706;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 10px 15px -3px rgba(217, 119, 6, 0.2);
+        margin-bottom: 20px;
+    }
+    .risk-card-green {
+        background: linear-gradient(135deg, #064e3b 0%, #1e1b4b 100%);
+        border: 1px solid #059669;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.2);
+        margin-bottom: 20px;
+    }
+    
+    .metric-container {
+        background-color: #111c38;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+    
+    /* Headers & Text */
+    h1, h2, h3 {
+        color: #f8fafc;
+        font-weight: 700;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 ACTIVE_BENCHMARK_FUNDS = {
     "⭐ HDFC Top 100 Fund - Direct Growth": "118989",
@@ -172,9 +230,9 @@ def compute_scheme_metrics(scheme_code):
     }
 
 # ----------------- SIDEBAR CONTROLS & SEARCH BAR -----------------
-st.sidebar.header("🕹️ Navigation & Search")
+st.sidebar.markdown("### 🛡️ AlphaShield Terminal")
 app_mode = st.sidebar.radio(
-    "Select Dashboard Module:",
+    "Select Intelligence Module:",
     [
         "📈 NIFTY50 Stock Crash-Risk Predictor",
         "🛡️ Mutual Fund Intelligence Suite",
@@ -184,7 +242,7 @@ app_mode = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("🔍 Asset Search & Inputs")
+st.sidebar.markdown("### 🔍 Asset Search & Inputs")
 
 if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     selected_stock = st.sidebar.selectbox("Select NIFTY50 Stock:", ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "SBIN.NS"])
@@ -212,9 +270,8 @@ if 'portfolio' not in st.session_state:
 # ==============================================================================
 if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     st.title("📈 NIFTY50 Stock Crash-Risk Predictor")
-    st.markdown("Evaluate individual equity risk profiles using machine learning classification and transparent AI decision rationale.")
+    st.markdown("Institutional Machine Learning Classification & Explainable AI Decision Engine (30-Day Forward Horizon).")
     
-    # CRASH RISK DISPLAYED PROMINENTLY AT THE TOP OF THE PAGE
     sample_feat = {
         'NAV': stock_price, 'Daily_Return_Pct': 0.01, 'Annualized_Return_1Y': stock_ret_1y,
         'Volatility_30D': 18.0, 'Annualized_Volatility_Cleaned': stock_vol, 'Sharpe_Ratio_Cleaned': 0.8,
@@ -226,58 +283,84 @@ if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     reasons = get_ai_reasoning(sample_feat, stock_prob)
     
     st.markdown("---")
-    st.subheader(f"⚡ Live Risk Assessment for `{selected_stock}`")
     
+    # PROMINENT RISK WIDGETS CARD
     if stock_prob >= 0.6:
-        st.error(f"### 🔴 CRITICAL CRASH RISK: {stock_prob*100:.1f}% Probability (Next 30 Days)")
+        card_class = "risk-card-red"
+        risk_label = "🔴 CRITICAL CRASH RISK"
     elif stock_prob >= 0.3:
-        st.warning(f"### 🟡 MODERATE WATCHLIST RISK: {stock_prob*100:.1f}% Probability (Next 30 Days)")
+        card_class = "risk-card-yellow"
+        risk_label = "🟡 MODERATE WATCHLIST RISK"
     else:
-        st.success(f"### 🟢 LOW CRASH RISK: {stock_prob*100:.1f}% Probability (Next 30 Days)")
+        card_class = "risk-card-green"
+        risk_label = "🟢 LOW CRASH RISK (STABLE)"
         
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Predicted Crash Probability", f"{stock_prob*100:.1f}%")
-    col_m2.metric("Input Stock Price", f"₹{stock_price:,.2f}")
-    col_m3.metric("Trailing 1Y Return", f"{stock_ret_1y:+.2f}%")
+    st.markdown(f"""
+    <div class="{card_class}">
+        <h3 style="margin: 0; color: #ffffff;">{risk_label}</h3>
+        <h1 style="font-size: 42px; margin: 10px 0; color: #ffffff;">{stock_prob*100:.1f}% <span style="font-size: 18px; font-weight: normal;">30-Day Crash Probability</span></h1>
+        <p style="margin: 0; color: #cbd5e1;">Targeting asset: <strong>{selected_stock}</strong></p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("#### 🧠 Explainable AI Decision Rationale:")
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.markdown(f"""<div class="metric-container"><h4>Input Price</h4><h2>₹{stock_price:,.2f}</h2></div>""", unsafe_allow_html=True)
+    with col_m2:
+        st.markdown(f"""<div class="metric-container"><h4>Trailing 1Y Return</h4><h2>{stock_ret_1y:+.2f}%</h2></div>""", unsafe_allow_html=True)
+    with col_m3:
+        st.markdown(f"""<div class="metric-container"><h4>Annualized Volatility</h4><h2>{stock_vol:.1f}%</h2></div>""", unsafe_allow_html=True)
+        
+    st.markdown("### 🧠 Explainable AI Decision Rationale")
     for r in reasons:
-        st.write(f"- {r}")
+        st.info(f"• {r}")
 
 # ==============================================================================
 # DASHBOARD 2: MUTUAL FUND INTELLIGENCE SUITE
 # ==============================================================================
 elif app_mode == "🛡️ Mutual Fund Intelligence Suite":
     st.title("🛡️ Mutual Fund Intelligence & Stress-Testing Suite")
-    st.markdown("Analyze live AMFI mutual fund schemes, evaluate distress indicators, and run crisis stress tests.")
+    st.markdown("Live AMFI scheme analytics, crisis stress testing, and quantitative risk ratings.")
     
     if selected_mf_code:
         try:
             res = compute_scheme_metrics(selected_mf_code)
-            
-            # CRASH RISK & SUMMARY DISPLAYED PROMINENTLY AT THE TOP
             st.markdown("---")
-            st.subheader(f"⚡ Live Fund Audit: `{res['name']}`")
             
             if res['prob'] >= 0.6:
-                st.error(f"### 🔴 CRITICAL DISTRESS RISK: {res['prob']*100:.1f}% Probability")
+                card_class = "risk-card-red"
+                risk_label = "🔴 CRITICAL DISTRESS RISK"
             elif res['prob'] >= 0.3:
-                st.warning(f"### 🟡 WATCHLIST RISK: {res['prob']*100:.1f}% Probability")
+                card_class = "risk-card-yellow"
+                risk_label = "🟡 WATCHLIST / MODERATE RISK"
             else:
-                st.success(f"### 🟢 HEALTHY / SAFE: {res['prob']*100:.1f}% Probability")
+                card_class = "risk-card-green"
+                risk_label = "🟢 HEALTHY / SAFE ALLOCATION"
                 
-            c_f1, c_f2, c_f3, c_f4 = st.columns(4)
-            c_f1.metric("Live NAV", f"₹{res['nav']:.2f}")
-            c_f2.metric("1Y Return", f"{res['ret_1y']:+.2f}%")
-            c_f3.metric("Sharpe Ratio", f"{res['sharpe']:.2f}")
-            c_f4.metric("1Y Max Drawdown", f"{res['drawdown_1y']:.2f}%")
+            st.markdown(f"""
+            <div class="{card_class}">
+                <h3 style="margin: 0; color: #ffffff;">{risk_label}</h3>
+                <h1 style="font-size: 42px; margin: 10px 0; color: #ffffff;">{res['prob']*100:.1f}% <span style="font-size: 18px; font-weight: normal;">30-Day Distress Probability</span></h1>
+                <p style="margin: 0; color: #cbd5e1;">Scheme: <strong>{res['name']}</strong> ({res['category']})</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            st.markdown("#### 🧠 Explainable AI Decision Rationale:")
+            c_f1, c_f2, c_f3, c_f4 = st.columns(4)
+            with c_f1:
+                st.markdown(f"""<div class="metric-container"><h4>Live NAV</h4><h2>₹{res['nav']:.2f}</h2></div>""", unsafe_allow_html=True)
+            with c_f2:
+                st.markdown(f"""<div class="metric-container"><h4>1-Year Return</h4><h2>{res['ret_1y']:+.2f}%</h2></div>""", unsafe_allow_html=True)
+            with c_f3:
+                st.markdown(f"""<div class="metric-container"><h4>Sharpe Ratio</h4><h2>{res['sharpe']:.2f}</h2></div>""", unsafe_allow_html=True)
+            with c_f4:
+                st.markdown(f"""<div class="metric-container"><h4>1-Year Max Drawdown</h4><h2>{res['drawdown_1y']:.2f}%</h2></div>""", unsafe_allow_html=True)
+                
+            st.markdown("### 🧠 Explainable AI Decision Rationale")
             for r in res['reasoning']:
-                st.write(f"- {r}")
+                st.info(f"• {r}")
                 
             st.markdown("---")
-            st.subheader("📊 Historical NAV Trend")
+            st.subheader("📊 Historical NAV Performance Trend")
             st.line_chart(res['df_nav']['nav'])
             
         except Exception as e:
@@ -288,14 +371,18 @@ elif app_mode == "🛡️ Mutual Fund Intelligence Suite":
 # ==============================================================================
 elif app_mode == "💼 Paper Trading & AI Ledger":
     st.title("💼 Universal Paper Trading & AI Risk Ledger")
+    st.markdown("Simulate cross-asset execution and monitor portfolio risk in real-time.")
     
     current_portfolio_val = sum(pos['units'] * pos['buy_price'] for pos in st.session_state.portfolio)
     total_net_worth = st.session_state.cash + current_portfolio_val
     
     c_w1, c_w2, c_w3 = st.columns(3)
-    c_w1.metric("Available Paper Cash", f"₹{st.session_state.cash:,.2f}")
-    c_w2.metric("Portfolio Market Value", f"₹{current_portfolio_val:,.2f}")
-    c_w3.metric("Total Net Worth", f"₹{total_net_worth:,.2f}")
+    with c_w1:
+        st.markdown(f"""<div class="metric-container"><h4>Available Paper Cash</h4><h2>₹{st.session_state.cash:,.2f}</h2></div>""", unsafe_allow_html=True)
+    with c_w2:
+        st.markdown(f"""<div class="metric-container"><h4>Portfolio Value</h4><h2>₹{current_portfolio_val:,.2f}</h2></div>""", unsafe_allow_html=True)
+    with c_w3:
+        st.markdown(f"""<div class="metric-container"><h4>Total Net Worth</h4><h2>₹{total_net_worth:,.2f}</h2></div>""", unsafe_allow_html=True)
     
     st.markdown("---")
     st.subheader("🛒 Execute Paper Order")
@@ -317,11 +404,12 @@ elif app_mode == "💼 Paper Trading & AI Ledger":
                 'invested_amt': trade_amt, 'ai_risk_pct': "12.5%"
             })
             st.session_state.cash -= trade_amt
-            st.success(f"Bought {units:.3f} units of {trade_name} successfully!")
+            st.success(f"Successfully bought {units:.3f} units of {trade_name}!")
             st.rerun()
 
     if len(st.session_state.portfolio) > 0:
         st.markdown("---")
+        st.subheader("📑 Active Holdings")
         st.dataframe(pd.DataFrame(st.session_state.portfolio), use_container_width=True)
         if st.button("🔄 Reset Portfolio"):
             st.session_state.cash = 100000.0
@@ -333,10 +421,12 @@ elif app_mode == "💼 Paper Trading & AI Ledger":
 # ==============================================================================
 else:
     st.title("📊 Monte Carlo 30-Day Value-at-Risk (VaR) Simulator")
+    st.markdown("Simulate 1,000 forward-looking price paths to determine portfolio tail-risk thresholds.")
+    
     current_portfolio_val = sum(pos['units'] * pos['buy_price'] for pos in st.session_state.portfolio)
     
     if current_portfolio_val <= 0:
-        st.warning("Your portfolio has zero value. Execute some paper trades in the Ledger module first.")
+        st.warning("Your active portfolio has zero value. Execute some paper trades in the Ledger module first.")
     else:
         sim_vol = st.slider("Estimated Annualized Volatility (%):", 5.0, 40.0, 18.0)
         if st.button("🚀 Run Monte Carlo Simulation", type="primary"):
@@ -346,7 +436,16 @@ else:
             ending_values = current_portfolio_val * (1 + np.prod(1 + simulated_returns, axis=1) - 1)
             var_95 = np.percentile(ending_values, 5)
             
-            st.metric("95% 30-Day Value-at-Risk (VaR)", f"₹{var_95:,.2f}")
+            st.markdown("---")
+            st.markdown(f"""
+            <div class="risk-card-yellow">
+                <h3 style="margin: 0; color: #ffffff;">📉 PORTFOLIO VaR AUDIT</h3>
+                <h1 style="font-size: 38px; margin: 10px 0; color: #ffffff;">₹{var_95:,.2f}</h1>
+                <p style="margin: 0; color: #cbd5e1;">95% Confidence 30-Day Value-at-Risk Threshold</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
             fig = px.histogram(ending_values, nbins=50, title="Portfolio Ending Value Distribution (30 Days Ahead)")
-            fig.add_vline(x=var_95, line_dash="dash", line_color="red", annotation_text="95% VaR Threshold")
+            fig.update_layout(plot_bgcolor='#070d1b', paper_bgcolor='#111c38', font_color='#e2e8f0')
+            fig.add_vline(x=var_95, line_dash="dash", line_color="#ef4444", annotation_text="95% VaR Threshold")
             st.plotly_chart(fig, use_container_width=True)
