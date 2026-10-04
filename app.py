@@ -273,7 +273,7 @@ elif page=="⚔️ Fund Duel":
             with q: st.markdown(f"**{clean(ra['name'])}**"); explain(ra)
             with w: st.markdown(f"**{clean(rb['name'])}**"); explain(rb)
         except Exception as e: st.error(str(e))
-
+            
 # ============================ SINGLE ============================
 elif page=="🔍 Fund Intelligence":
     st.subheader("🔍 Single Scheme Intelligence")
@@ -310,6 +310,8 @@ elif page=="🔍 Fund Intelligence":
                 <tr><td>Composite Score</td><td>{r['score']:.2f}</td></tr><tr><td>Model Risk</td><td>{r['prob']*100:.1f}%</td></tr></table>
                 <p>This is a research document, not investment advice.</p></body></html>"""
                 st.download_button("📥 Download HTML Factsheet",html,f"AlphaShield_{code}.html","text/html",type="primary")
+        except Exception as e:
+            st.error(str(e))
 
 # ============================ ADVANCED ============================
 elif page=="📊 Advanced Analytics":
