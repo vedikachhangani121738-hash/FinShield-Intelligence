@@ -232,13 +232,13 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct):
 def render_shap_explanation(df):
     try:
         model = joblib.load('random_forest_crash_model.joblib')
-        features_df = pd.DataFrame([{
-            'RSI': df['RSI'].iloc[-1] if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0,
-            'Volatility': df['Close'].pct_change().std() * np.sqrt(252),
-            'Momentum': (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0.0,
-            'SMA_Ratio': df['Close'].iloc[-1] / df['SMA_20'].iloc[-1] if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else 1.0,
-            'Volume_Surge': df['Volume'].iloc[-1] / df['Volume'].rolling(20).mean().iloc[-1] if 'Volume' in df and df['Volume'].rolling(20).mean().iloc[-1] > 0 else 1.0
-        ])
+        features_df = pd.DataFrame({
+            'RSI': [df['RSI'].iloc[-1] if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0],
+            'Volatility': [df['Close'].pct_change().std() * np.sqrt(252)],
+            'Momentum': [(df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0.0],
+            'SMA_Ratio': [df['Close'].iloc[-1] / df['SMA_20'].iloc[-1] if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else 1.0],
+            'Volume_Surge': [df['Volume'].iloc[-1] / df['Volume'].rolling(20).mean().iloc[-1] if 'Volume' in df and df['Volume'].rolling(20).mean().iloc[-1] > 0 else 1.0]
+        })
         explainer = shap.TreeExplainer(model)
         shap_values = explainer(features_df)
         
