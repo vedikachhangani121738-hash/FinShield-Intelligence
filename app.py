@@ -187,7 +187,7 @@ if data_source == "Validation Benchmark File":
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
+        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
     else:
         st.sidebar.error("❌ Benchmark dataset not found.")
 
