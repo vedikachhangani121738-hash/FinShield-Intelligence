@@ -9,7 +9,7 @@ import yfinance as yf
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="FinShield | Institutional Risk Intelligence Terminal",
-    page_icon="🛡️️",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -160,7 +160,6 @@ def load_val_data():
 
 val_df = load_val_data()
 
-# Safe global initialization of metadata column names
 ticker_col = "Ticker" if (not val_df.empty and "Ticker" in val_df.columns) else (val_df.columns[0] if not val_df.empty else "Ticker")
 date_col = "Date" if (not val_df.empty and "Date" in val_df.columns) else (val_df.columns[1] if not val_df.empty and len(val_df.columns) > 1 else "Date")
 
@@ -267,8 +266,6 @@ if model is None or row_data.empty:
     st.info("💡 **Terminal Ready**: Select an asset from the sidebar or search a company keyword to initialize telemetry analytics.")
 else:
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
-    
-    # Calculate Crash Risk Probability (passing DataFrame directly to keep feature names)
     prob = float(model.predict_proba(X_input)[:, 1][0])
 
     # -------------------------------------------------------------------------
@@ -475,48 +472,99 @@ else:
                 st.info("No abnormal risk factor surges detected across evaluated features for this session.")
 
     # -------------------------------------------------------------------------
-    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP
+    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP (ENHANCED FOR CUSTOM MULTI-STOCK)
     # -------------------------------------------------------------------------
     with tab2:
         st.subheader("💼 Multi-Asset Portfolio 'Sleep-at-Night' Heatmap")
-        st.markdown("Monitor your entire basket of equities simultaneously with traffic-light risk classification:")
+        st.markdown("Monitor your custom basket of equities simultaneously with traffic-light risk classification:")
 
-        if not val_df.empty and ticker_col in val_df.columns and date_col in val_df.columns:
-            latest_dt = val_df[date_col].max()
-            current_snapshot = val_df[val_df[date_col] == latest_dt]
-            
-            portfolio_records = []
-            for t_sym in current_snapshot[ticker_col].unique():
-                t_row = current_snapshot[current_snapshot[ticker_col] == t_sym].reindex(columns=feature_cols).fillna(0)
-                if not t_row.empty:
-                    t_p = float(model.predict_proba(t_row)[:, 1][0])
-                    status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
-                    portfolio_records.append({
-                        "Asset Symbol": t_sym,
-                        "Crash Probability": f"{t_p*100:.1f}%",
-                        "Risk Status": status,
-                        "_raw_prob": t_p
-                    })
-            
-            if portfolio_records:
-                port_df = pd.DataFrame(portfolio_records)
-                avg_port_risk = port_df["_raw_prob"].mean() * 100
-                
-                col_p1, col_p2 = st.columns([1, 2])
-                with col_p1:
-                    st.metric(label="PORTFOLIO SAFETY INDEX", value=f"{100 - avg_port_risk:.1f}/100", delta=f"{avg_port_risk:.1f}% Avg Risk")
-                with col_p2:
-                    if avg_port_risk < 15:
-                        st.success("🟢 **Portfolio Status: Robust & Stable.** Asset allocation is well within safe historical parameters.")
-                    elif avg_port_risk < 30:
-                        st.warning("🟡 **Portfolio Status: Moderate Alert.** Volatility is creeping up across selected positions.")
-                    else:
-                        st.danger("🔴 **Portfolio Status: High Tail-Risk Warning.** Multiple holdings exhibit high downside vulnerability.")
+        portfolio_source = st.radio(
+            "Select Portfolio Evaluation Mode", 
+            ["Custom Live Watchlist (yfinance)", "Validation Benchmark Snapshot"],
+            horizontal=True
+        )
 
-                st.markdown("---")
-                st.dataframe(port_df.drop(columns=["_raw_prob"]), use_container_width=True, hide_index=True)
+        portfolio_records = []
+
+        if portfolio_source == "Custom Live Watchlist (yfinance)":
+            default_tickers = "RELIANCE.NS, TCS.NS, INFY.NS, TATAMOTORS.NS, HDFCBANK.NS"
+            user_tickers = st.text_input("Enter Portfolio Tickers (comma-separated)", default_tickers)
+            st.caption("Examples: `RELIANCE.NS, TCS.NS, AAPL, MSFT, TSLA`")
+            
+            if user_tickers:
+                tickers_list = [t.strip() for t in user_tickers.split(",") if t.strip()]
+                with st.spinner("Analyzing portfolio telemetry across selected assets..."):
+                    for t_sym in tickers_list:
+                        try:
+                            df_live = yf.download(t_sym, period="3mo", interval="1d", progress=False)
+                            if not df_live.empty:
+                                if isinstance(df_live.columns, pd.MultiIndex):
+                                    df_live.columns = df_live.columns.get_level_values(0)
+                                df_live['Close_pct'] = df_live['Close'].pct_change()
+                                df_live['Volatility_30D'] = df_live['Close_pct'].rolling(30).std() * np.sqrt(252)
+                                delta = df_live['Close'].diff()
+                                gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+                                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                                rs = gain / (loss.replace(0, 1e-6))
+                                df_live['RSI_14'] = 100 - (100 / (1 + rs))
+                                df_live['SMA_50'] = df_live['Close'].rolling(50).mean()
+                                df_live['SMA_200'] = df_live['Close'].rolling(200).mean()
+                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
+                                df_live['Beta_60D'] = 1.0
+                                df_live['Vol_x_Beta'] = df_live['Volatility_30D'] * df_live['Beta_60D']
+                                df_live['Lagged_Return_5D'] = df_live['Close'].pct_change(5)
+                                df_live['Volume_Spike_Ratio'] = df_live['Volume'] / (df_live['Volume'].rolling(20).mean().replace(0, 1))
+                                df_live['Market_Volatility_Index'] = 15.0
+                                df_live['Month'] = df_live.index.dt.month
+                                
+                                latest_row = df_live.dropna().tail(1)
+                                if not latest_row.empty:
+                                    t_row = latest_row.reindex(columns=feature_cols).fillna(0)
+                                    t_p = float(model.predict_proba(t_row)[:, 1][0])
+                                    status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
+                                    portfolio_records.append({
+                                        "Asset Symbol": t_sym.upper(),
+                                        "Crash Probability": f"{t_p*100:.1f}%",
+                                        "Risk Status": status,
+                                        "_raw_prob": t_p
+                                    })
+                        except Exception as e:
+                            st.warning(f"Could not fetch telemetry for {t_sym}: {e}")
         else:
-            st.info("Portfolio heatmap is optimized for benchmark validation datasets. Switch data engine to 'Validation Benchmark File' in sidebar to view.")
+            if not val_df.empty and ticker_col in val_df.columns and date_col in val_df.columns:
+                latest_dt = val_df[date_col].max()
+                current_snapshot = val_df[val_df[date_col] == latest_dt]
+                for t_sym in current_snapshot[ticker_col].unique():
+                    t_row = current_snapshot[current_snapshot[ticker_col] == t_sym].reindex(columns=feature_cols).fillna(0)
+                    if not t_row.empty:
+                        t_p = float(model.predict_proba(t_row)[:, 1][0])
+                        status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
+                        portfolio_records.append({
+                            "Asset Symbol": t_sym,
+                            "Crash Probability": f"{t_p*100:.1f}%",
+                            "Risk Status": status,
+                            "_raw_prob": t_p
+                        })
+            else:
+                st.info("Validation benchmark dataset not available.")
+
+        if portfolio_records:
+            port_df = pd.DataFrame(portfolio_records)
+            avg_port_risk = port_df["_raw_prob"].mean() * 100
+            
+            col_p1, col_p2 = st.columns([1, 2])
+            with col_p1:
+                st.metric(label="PORTFOLIO SAFETY INDEX", value=f"{100 - avg_port_risk:.1f}/100", delta=f"{avg_port_risk:.1f}% Avg Risk")
+            with col_p2:
+                if avg_port_risk < 15:
+                    st.success("🟢 **Portfolio Status: Robust & Stable.** Asset allocation is well within safe historical parameters.")
+                elif avg_port_risk < 30:
+                    st.warning("🟡 **Portfolio Status: Moderate Alert.** Volatility is creeping up across selected positions.")
+                else:
+                    st.error("🔴 **Portfolio Status: High Tail-Risk Warning.** Multiple holdings exhibit high downside vulnerability.")
+
+            st.markdown("---")
+            st.dataframe(port_df.drop(columns=["_raw_prob"]), use_container_width=True, hide_index=True)
 
     # -------------------------------------------------------------------------
     # TAB 3: TECHNICAL TELEMETRY & SIGNALS
