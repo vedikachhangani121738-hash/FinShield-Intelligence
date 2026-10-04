@@ -9,12 +9,11 @@ import yfinance as yf
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="FinShield | Institutional Risk Intelligence Terminal",
-    page_icon="🛡️",
+    page_icon="🛡️️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
 st.markdown("""
     <style>
     @keyframes pulse-red {
@@ -143,7 +142,6 @@ def load_model():
 
 model = load_model()
 
-# Align feature expectations strictly with model definition (`model.feature_names_in_`)
 if model is not None and hasattr(model, "feature_names_in_"):
     feature_cols = list(model.feature_names_in_)
 else:
@@ -153,7 +151,6 @@ else:
         "Lagged_Return_5D", "Lagged_Volume_5D", "Volume_Spike_Ratio", "Month"
     ]
 
-# Helper function to load validation dataset safely
 @st.cache_data
 def load_val_data():
     try:
@@ -162,6 +159,10 @@ def load_val_data():
         return pd.DataFrame()
 
 val_df = load_val_data()
+
+# Safe global initialization of metadata column names
+ticker_col = "Ticker" if (not val_df.empty and "Ticker" in val_df.columns) else (val_df.columns[0] if not val_df.empty else "Ticker")
+date_col = "Date" if (not val_df.empty and "Date" in val_df.columns) else (val_df.columns[1] if not val_df.empty and len(val_df.columns) > 1 else "Date")
 
 # -----------------------------------------------------------------------------
 # 3. SIDEBAR TERMINAL CONTROLS & DATA STREAM SELECTION
@@ -173,7 +174,6 @@ row_data = pd.DataFrame()
 ticker_data = pd.DataFrame()
 selected_ticker = ""
 selected_date = ""
-date_col = ""
 
 if data_source == "Validation Benchmark File":
     if not val_df.empty:
@@ -187,7 +187,7 @@ if data_source == "Validation Benchmark File":
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
     else:
         st.sidebar.error("❌ Benchmark dataset not found.")
 
@@ -196,7 +196,6 @@ else:
     search_query = st.sidebar.text_input("Company Name or Ticker Keyword", "Reliance")
     st.sidebar.caption("Examples: `Apple`, `Reliance`, `Tata Motors`, `Microsoft`, `NVDA`")
     
-    selected_ticker = ""
     if search_query:
         try:
             search_results = yf.Search(search_query, max_results=8).quotes
@@ -245,8 +244,6 @@ else:
             df['Beta_60D'] = 1.0 
             df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
             df['Lagged_Return_5D'] = df['Close'].pct_change(5)
-            df['Lagged_Return_10D'] = df['Close'].pct_change(10) if 'Lagged_Return_10D' in feature_cols else 0
-            df['Lagged_Return_20D'] = df['Close'].pct_change(20) if 'Lagged_Return_20D' in feature_cols else 0
             df['Lagged_Volume_5D'] = df['Volume'].shift(5)
             df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
             df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
@@ -261,7 +258,7 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
@@ -269,12 +266,10 @@ else:
 if model is None or row_data.empty:
     st.info("💡 **Terminal Ready**: Select an asset from the sidebar or search a company keyword to initialize telemetry analytics.")
 else:
-    # Safely reindex feature matrix to match exact training columns and prevent shape mismatch
     X_input = row_data.reindex(columns=feature_cols).fillna(0)
     
-    # Calculate Crash Risk Probability
-    prob = float(model.predict_proba(X_input.values)[:, 1][0])
-    is_anomaly = prob >= 0.30
+    # Calculate Crash Risk Probability (passing DataFrame directly to keep feature names)
+    prob = float(model.predict_proba(X_input)[:, 1][0])
 
     # -------------------------------------------------------------------------
     # FEATURE 1: HEADLINE-DRIVEN "NEWS SHOCK" SIMULATOR (SIDEBAR)
@@ -296,7 +291,6 @@ else:
         if not row_data.empty:
             X_test_shock = X_input.copy()
             
-            # Apply macro narrative shocks to underlying ML features
             if news_scenario == "🛢️ Crude Oil Spikes Above $100/Barrel":
                 if 'Volatility_30D' in X_test_shock.columns:
                     X_test_shock['Volatility_30D'] *= 1.45
@@ -324,12 +318,11 @@ else:
                 if 'Volume_Spike_Ratio' in X_test_shock.columns:
                     X_test_shock['Volume_Spike_Ratio'] = 2.5
             
-            # Recalculate dependent composite feature if present
             if 'Vol_x_Beta' in X_test_shock.columns and 'Volatility_30D' in X_test_shock.columns:
                 beta_val = X_test_shock['Beta_60D'].values[0] if 'Beta_60D' in X_test_shock.columns else 1.0
                 X_test_shock['Vol_x_Beta'] = X_test_shock['Volatility_30D'].values[0] * beta_val
 
-            simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
+            simulated_prob = float(model.predict_proba(X_test_shock)[:, 1][0])
             
             st.markdown("---")
             st.metric(
@@ -339,7 +332,7 @@ else:
                 delta_color="inverse"
             )
     
-    # Navigation Tabs (Including Feature 2: Portfolio Heatmap)
+    # Navigation Tabs
     tab1, tab2, tab3, tab4 = st.tabs([
         "🛡️ Executive Risk Scorecard", 
         "💼 Portfolio Sleep-at-Night Heatmap",
@@ -423,7 +416,6 @@ else:
                 # -------------------------------------------------------------
                 st.markdown("#### 🔄 Automated Defensive Swap Recommendation")
                 if not val_df.empty and ticker_col in val_df.columns:
-                    # Scan validation dataset for lowest risk alternative asset
                     latest_date_val = val_df[date_col].max() if date_col in val_df.columns else None
                     if latest_date_val is not None:
                         snapshot_df = val_df[val_df[date_col] == latest_date_val]
@@ -433,7 +425,7 @@ else:
                                 if t != selected_ticker:
                                     t_row = snapshot_df[snapshot_df[ticker_col] == t].reindex(columns=feature_cols).fillna(0)
                                     if not t_row.empty:
-                                        t_prob = float(model.predict_proba(t_row.values)[:, 1][0])
+                                        t_prob = float(model.predict_proba(t_row)[:, 1][0])
                                         safe_candidates.append((t, t_prob))
                             if safe_candidates:
                                 safe_candidates.sort(key=lambda x: x[1])
@@ -497,7 +489,7 @@ else:
             for t_sym in current_snapshot[ticker_col].unique():
                 t_row = current_snapshot[current_snapshot[ticker_col] == t_sym].reindex(columns=feature_cols).fillna(0)
                 if not t_row.empty:
-                    t_p = float(model.predict_proba(t_row.values)[:, 1][0])
+                    t_p = float(model.predict_proba(t_row)[:, 1][0])
                     status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
                     portfolio_records.append({
                         "Asset Symbol": t_sym,
@@ -510,7 +502,6 @@ else:
                 port_df = pd.DataFrame(portfolio_records)
                 avg_port_risk = port_df["_raw_prob"].mean() * 100
                 
-                # Aggregate Portfolio Safety Card
                 col_p1, col_p2 = st.columns([1, 2])
                 with col_p1:
                     st.metric(label="PORTFOLIO SAFETY INDEX", value=f"{100 - avg_port_risk:.1f}/100", delta=f"{avg_port_risk:.1f}% Avg Risk")
