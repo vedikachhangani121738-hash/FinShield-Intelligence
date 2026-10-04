@@ -24,6 +24,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import os
+import yfinance as yf
 from mftool import Mftool
 
 st.set_page_config(
@@ -33,60 +34,60 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ----------------- PROFESSIONAL TRADING TERMINAL CSS (DARK BLUE THEME) -----------------
+# ----------------- MULTI-TONE TRADING TERMINAL CSS (WHITE TEXT & DARK PALETTE) -----------------
 st.markdown("""
 <style>
-    /* Main App Background & Font */
+    /* Main App Background */
     .stApp {
-        background-color: #070d1b;
-        color: #e2e8f0;
+        background-color: #030712;
+        color: #ffffff;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background-color: #0b1329;
+        background-color: #0b0f19;
         border-right: 1px solid #1e293b;
     }
     
-    /* Professional Metric & Risk Cards */
+    /* Global Force White Text for High Visibility */
+    h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, div[data-baseweb="select"] span {
+        color: #ffffff !important;
+    }
+    
+    /* Professional Risk Cards */
     .risk-card-red {
-        background: linear-gradient(135deg, #450a0a 0%, #1e1b4b 100%);
-        border: 1px solid #dc2626;
+        background: linear-gradient(135deg, #7f1d1d 0%, #1e1b4b 100%);
+        border: 1px solid #ef4444;
         border-radius: 12px;
         padding: 24px;
-        box-shadow: 0 10px 15px -3px rgba(220, 38, 38, 0.2);
+        box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
         margin-bottom: 20px;
     }
     .risk-card-yellow {
-        background: linear-gradient(135deg, #422006 0%, #1e1b4b 100%);
-        border: 1px solid #d97706;
+        background: linear-gradient(135deg, #78350f 0%, #1e1b4b 100%);
+        border: 1px solid #f59e0b;
         border-radius: 12px;
         padding: 24px;
-        box-shadow: 0 10px 15px -3px rgba(217, 119, 6, 0.2);
+        box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.3);
         margin-bottom: 20px;
     }
     .risk-card-green {
-        background: linear-gradient(135deg, #064e3b 0%, #1e1b4b 100%);
-        border: 1px solid #059669;
+        background: linear-gradient(135deg, #065f46 0%, #1e1b4b 100%);
+        border: 1px solid #10b981;
         border-radius: 12px;
         padding: 24px;
-        box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.2);
+        box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
         margin-bottom: 20px;
     }
     
+    /* Metric Card Containers */
     .metric-container {
-        background-color: #111c38;
+        background-color: #0f172a;
         border: 1px solid #1e293b;
         border-radius: 8px;
         padding: 16px;
         text-align: center;
-    }
-    
-    /* Headers & Text */
-    h1, h2, h3 {
-        color: #f8fafc;
-        font-weight: 700;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -166,6 +167,62 @@ def get_ai_reasoning(feat_dict, prob):
         reasons.append("Stable risk profile with strong resilience metrics, healthy Sharpe ratio, and controlled drawdown limits.")
     return reasons
 
+@st.cache_data(ttl=3600)
+def load_stock_data(ticker):
+    df = yf.download(ticker, period="2y", progress=False)
+    if df.empty:
+        raise ValueError(f"Could not fetch data for ticker {ticker}")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
+def compute_stock_metrics(ticker):
+    df = load_stock_data(ticker)
+    if 'Close' not in df.columns:
+        raise ValueError("Close price column missing from yfinance data.")
+    
+    df = df.dropna(subset=['Close'])
+    current_price = float(df['Close'].iloc[-1])
+    daily_returns = df['Close'].pct_change().dropna()
+    
+    price_1y_ago = float(df['Close'].iloc[-252]) if len(df) >= 252 else float(df['Close'].iloc[0])
+    ret_1y = ((current_price / price_1y_ago) - 1.0) * 100.0
+    
+    vol_30d = float(daily_returns.tail(30).std() * np.sqrt(30) * 100.0) if len(daily_returns) >= 5 else 15.0
+    ann_vol = float(daily_returns.tail(252).std() * np.sqrt(252) * 100.0) if len(daily_returns) >= 5 else 18.0
+    
+    rolling_max = df['Close'].tail(252).cummax()
+    drawdown_series = (df['Close'].tail(252) - rolling_max) / rolling_max
+    max_drawdown_1y = float(drawdown_series.min() * 100.0) if len(drawdown_series) > 0 else 0.0
+    
+    rf = 6.5
+    downside = daily_returns.tail(252)[daily_returns.tail(252) < 0]
+    downside_std = float(downside.std() * np.sqrt(252) * 100.0) if len(downside) > 0 else ann_vol
+    
+    sharpe = (ret_1y - rf) / ann_vol if ann_vol > 0 else 0.0
+    sortino = (ret_1y - rf) / downside_std if downside_std > 0 else 0.0
+    comp_score = max(0.0, min(1.0, 0.5 + (sharpe * 0.15) + (max_drawdown_1y / 100.0 * 0.2)))
+    
+    lag_1d = float(daily_returns.iloc[-2] * 100.0) if len(daily_returns) >= 2 else 0.0
+    lag_5d = float(daily_returns.iloc[-6] * 100.0) if len(daily_returns) >= 6 else lag_1d
+    
+    feat_dict = {
+        'NAV': current_price, 'Daily_Return_Pct': float(daily_returns.iloc[-1] * 100.0),
+        'Annualized_Return_1Y': ret_1y, 'Volatility_30D': vol_30d,
+        'Annualized_Volatility_Cleaned': ann_vol, 'Sharpe_Ratio_Cleaned': sharpe,
+        'Sortino_Ratio_Cleaned': sortino, 'Max_Drawdown_1Y_Pct': max_drawdown_1y,
+        'Composite_Score': comp_score, 'Lag_1D_Return': lag_1d, 'Lag_5D_Return': lag_5d
+    }
+    X_input = pd.DataFrame([feat_dict])[features]
+    prob = float(model.predict_proba(X_input)[0, 1])
+    reasoning_list = get_ai_reasoning(feat_dict, prob)
+    
+    return {
+        'ticker': ticker, 'price': current_price, 'ret_1y': ret_1y, 'vol': ann_vol,
+        'drawdown_1y': max_drawdown_1y, 'sharpe': sharpe, 'sortino': sortino,
+        'prob': prob, 'reasoning': reasoning_list, 'df_close': df['Close']
+    }
+
 def compute_scheme_metrics(scheme_code):
     details = obj.get_scheme_details(scheme_code)
     if not details or not isinstance(details, dict):
@@ -207,7 +264,7 @@ def compute_scheme_metrics(scheme_code):
     
     sharpe = (ret_1y - rf) / ann_vol if ann_vol > 0 else 0.0
     sortino = (ret_1y - rf) / downside_std if downside_std > 0 else 0.0
-    comp_score = max(0.1, min(0.9, 0.5 + (sharpe * 0.15) + (max_drawdown_1y / 100.0 * 0.2)))
+    comp_score = max(0.0, min(1.0, 0.5 + (sharpe * 0.15) + (max_drawdown_1y / 100.0 * 0.2)))
     
     lag_1d = float(daily_returns.iloc[-2] * 100.0) if len(daily_returns) >= 2 else 0.0
     lag_5d = float(daily_returns.iloc[-6] * 100.0) if len(daily_returns) >= 6 else lag_1d
@@ -246,9 +303,6 @@ st.sidebar.markdown("### 🔍 Asset Search & Inputs")
 
 if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     selected_stock = st.sidebar.selectbox("Select NIFTY50 Stock:", ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "SBIN.NS"])
-    stock_price = st.sidebar.number_input("Current Stock Price (₹):", value=2500.0, step=10.0)
-    stock_ret_1y = st.sidebar.number_input("Trailing 1Y Return (%):", value=15.5, step=0.5)
-    stock_vol = st.sidebar.number_input("Annualized Volatility (%):", value=22.0, step=0.5)
 
 elif app_mode == "🛡️ Mutual Fund Intelligence Suite":
     mf_source = st.sidebar.radio("Fund Source:", ["⭐ Popular Benchmarks", "🔎 Search AMFI Database"])
@@ -266,54 +320,57 @@ if 'portfolio' not in st.session_state:
     st.session_state.portfolio = []
 
 # ==============================================================================
-# DASHBOARD 1: NIFTY50 STOCK CRASH-RISK PREDICTOR
+# DASHBOARD 1: NIFTY50 STOCK CRASH-RISK PREDICTOR (LIVE YFINANCE)
 # ==============================================================================
 if app_mode == "📈 NIFTY50 Stock Crash-Risk Predictor":
     st.title("📈 NIFTY50 Stock Crash-Risk Predictor")
-    st.markdown("Institutional Machine Learning Classification & Explainable AI Decision Engine (30-Day Forward Horizon).")
+    st.markdown("Institutional Machine Learning Classification & Explainable AI Decision Engine powered by Live Market Data.")
     
-    sample_feat = {
-        'NAV': stock_price, 'Daily_Return_Pct': 0.01, 'Annualized_Return_1Y': stock_ret_1y,
-        'Volatility_30D': 18.0, 'Annualized_Volatility_Cleaned': stock_vol, 'Sharpe_Ratio_Cleaned': 0.8,
-        'Sortino_Ratio_Cleaned': 1.1, 'Max_Drawdown_1Y_Pct': -14.0, 'Composite_Score': 0.65,
-        'Lag_1D_Return': 0.01, 'Lag_5D_Return': -1.5
-    }
-    X_input = pd.DataFrame([sample_feat])[features]
-    stock_prob = float(model.predict_proba(X_input)[0, 1])
-    reasons = get_ai_reasoning(sample_feat, stock_prob)
-    
-    st.markdown("---")
-    
-    # PROMINENT RISK WIDGETS CARD
-    if stock_prob >= 0.6:
-        card_class = "risk-card-red"
-        risk_label = "🔴 CRITICAL CRASH RISK"
-    elif stock_prob >= 0.3:
-        card_class = "risk-card-yellow"
-        risk_label = "🟡 MODERATE WATCHLIST RISK"
-    else:
-        card_class = "risk-card-green"
-        risk_label = "🟢 LOW CRASH RISK (STABLE)"
+    try:
+        stock_res = compute_stock_metrics(selected_stock)
+        stock_prob = stock_res['prob']
+        reasons = stock_res['reasoning']
         
-    st.markdown(f"""
-    <div class="{card_class}">
-        <h3 style="margin: 0; color: #ffffff;">{risk_label}</h3>
-        <h1 style="font-size: 42px; margin: 10px 0; color: #ffffff;">{stock_prob*100:.1f}% <span style="font-size: 18px; font-weight: normal;">30-Day Crash Probability</span></h1>
-        <p style="margin: 0; color: #cbd5e1;">Targeting asset: <strong>{selected_stock}</strong></p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.markdown(f"""<div class="metric-container"><h4>Input Price</h4><h2>₹{stock_price:,.2f}</h2></div>""", unsafe_allow_html=True)
-    with col_m2:
-        st.markdown(f"""<div class="metric-container"><h4>Trailing 1Y Return</h4><h2>{stock_ret_1y:+.2f}%</h2></div>""", unsafe_allow_html=True)
-    with col_m3:
-        st.markdown(f"""<div class="metric-container"><h4>Annualized Volatility</h4><h2>{stock_vol:.1f}%</h2></div>""", unsafe_allow_html=True)
+        st.markdown("---")
         
-    st.markdown("### 🧠 Explainable AI Decision Rationale")
-    for r in reasons:
-        st.info(f"• {r}")
+        if stock_prob >= 0.6:
+            card_class = "risk-card-red"
+            risk_label = "🔴 CRITICAL CRASH RISK"
+        elif stock_prob >= 0.3:
+            card_class = "risk-card-yellow"
+            risk_label = "🟡 MODERATE WATCHLIST RISK"
+        else:
+            card_class = "risk-card-green"
+            risk_label = "🟢 LOW CRASH RISK (STABLE)"
+            
+        st.markdown(f"""
+        <div class="{card_class}">
+            <h3 style="margin: 0; color: #ffffff;">{risk_label}</h3>
+            <h1 style="font-size: 42px; margin: 10px 0; color: #ffffff;">{stock_prob*100:.1f}% <span style="font-size: 18px; font-weight: normal;">30-Day Crash Probability</span></h1>
+            <p style="margin: 0; color: #ffffff;">Live Ticker: <strong>{selected_stock}</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1:
+            st.markdown(f"""<div class="metric-container"><h4>Live Price</h4><h2>₹{stock_res['price']:,.2f}</h2></div>""", unsafe_allow_html=True)
+        with col_m2:
+            st.markdown(f"""<div class="metric-container"><h4>1-Year Return</h4><h2>{stock_res['ret_1y']:+.2f}%</h2></div>""", unsafe_allow_html=True)
+        with col_m3:
+            st.markdown(f"""<div class="metric-container"><h4>Volatility</h4><h2>{stock_res['vol']:.1f}%</h2></div>""", unsafe_allow_html=True)
+        with col_m4:
+            st.markdown(f"""<div class="metric-container"><h4>Sharpe Ratio</h4><h2>{stock_res['sharpe']:.2f}</h2></div>""", unsafe_allow_html=True)
+            
+        st.markdown("### 🧠 Explainable AI Decision Rationale")
+        for r in reasons:
+            st.info(f"• {r}")
+            
+        st.markdown("---")
+        st.subheader("📊 Live Stock Price Trend (2 Years)")
+        st.line_chart(stock_res['df_close'])
+        
+    except Exception as e:
+        st.error(f"Error fetching live data for {selected_stock}: {e}")
 
 # ==============================================================================
 # DASHBOARD 2: MUTUAL FUND INTELLIGENCE SUITE
@@ -341,7 +398,7 @@ elif app_mode == "🛡️ Mutual Fund Intelligence Suite":
             <div class="{card_class}">
                 <h3 style="margin: 0; color: #ffffff;">{risk_label}</h3>
                 <h1 style="font-size: 42px; margin: 10px 0; color: #ffffff;">{res['prob']*100:.1f}% <span style="font-size: 18px; font-weight: normal;">30-Day Distress Probability</span></h1>
-                <p style="margin: 0; color: #cbd5e1;">Scheme: <strong>{res['name']}</strong> ({res['category']})</p>
+                <p style="margin: 0; color: #ffffff;">Scheme: <strong>{res['name']}</strong> ({res['category']})</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -441,11 +498,11 @@ else:
             <div class="risk-card-yellow">
                 <h3 style="margin: 0; color: #ffffff;">📉 PORTFOLIO VaR AUDIT</h3>
                 <h1 style="font-size: 38px; margin: 10px 0; color: #ffffff;">₹{var_95:,.2f}</h1>
-                <p style="margin: 0; color: #cbd5e1;">95% Confidence 30-Day Value-at-Risk Threshold</p>
+                <p style="margin: 0; color: #ffffff;">95% Confidence 30-Day Value-at-Risk Threshold</p>
             </div>
             """, unsafe_allow_html=True)
             
             fig = px.histogram(ending_values, nbins=50, title="Portfolio Ending Value Distribution (30 Days Ahead)")
-            fig.update_layout(plot_bgcolor='#070d1b', paper_bgcolor='#111c38', font_color='#e2e8f0')
+            fig.update_layout(plot_bgcolor='#0f172a', paper_bgcolor='#030712', font_color='#ffffff')
             fig.add_vline(x=var_95, line_dash="dash", line_color="#ef4444", annotation_text="95% VaR Threshold")
             st.plotly_chart(fig, use_container_width=True)
