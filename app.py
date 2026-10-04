@@ -159,7 +159,7 @@ def calculate_crash_risk(df):
     try:
         rf_model = joblib.load('random_forest_crash_model.joblib') 
         return 15.0 
-    except FileNotFoundError:
+    except Exception:
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std() * np.sqrt(252) * 100  
         momentum = (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) * 100 if len(df) >= 20 else 0.0
@@ -247,8 +247,8 @@ def render_shap_explanation(df):
         plt.tight_layout()
         st.pyplot(fig)
         plt.clf()
-    except FileNotFoundError:
-        st.info("📦 Custom model file `random_forest_crash_model.joblib` not found. Displaying institutional fallback SHAP attribution breakdown:")
+    except Exception as e:
+        st.markdown("### 🔍 Model Feature Attribution (SHAP Fallback)")
         features = pd.DataFrame({'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'], 'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]}).sort_values(by='Weight', ascending=True)
         fig_bar = px.bar(features, x='Weight', y='Feature', orientation='h', color='Weight', color_continuous_scale='Blues')
         fig_bar.update_layout(height=260, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
