@@ -472,7 +472,7 @@ else:
                 st.info("No abnormal risk factor surges detected across evaluated features for this session.")
 
     # -------------------------------------------------------------------------
-    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP (ENHANCED FOR CUSTOM MULTI-STOCK)
+    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP (CUSTOM MULTI-STOCK EVALUATION)
     # -------------------------------------------------------------------------
     with tab2:
         st.subheader("💼 Multi-Asset Portfolio 'Sleep-at-Night' Heatmap")
@@ -496,26 +496,29 @@ else:
                 with st.spinner("Analyzing portfolio telemetry across selected assets..."):
                     for t_sym in tickers_list:
                         try:
-                            df_live = yf.download(t_sym, period="3mo", interval="1d", progress=False)
+                            df_live = yf.download(t_sym, period="6mo", interval="1d", progress=False)
                             if not df_live.empty:
                                 if isinstance(df_live.columns, pd.MultiIndex):
                                     df_live.columns = df_live.columns.get_level_values(0)
+                                
                                 df_live['Close_pct'] = df_live['Close'].pct_change()
                                 df_live['Volatility_30D'] = df_live['Close_pct'].rolling(30).std() * np.sqrt(252)
+                                
                                 delta = df_live['Close'].diff()
                                 gain = (delta.where(delta > 0, 0)).rolling(14).mean()
                                 loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
                                 rs = gain / (loss.replace(0, 1e-6))
                                 df_live['RSI_14'] = 100 - (100 / (1 + rs))
+                                
                                 df_live['SMA_50'] = df_live['Close'].rolling(50).mean()
                                 df_live['SMA_200'] = df_live['Close'].rolling(200).mean()
-                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
+                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df_live['Volume'].rolling(20).sum().replace(0, 1))
                                 df_live['Beta_60D'] = 1.0
                                 df_live['Vol_x_Beta'] = df_live['Volatility_30D'] * df_live['Beta_60D']
                                 df_live['Lagged_Return_5D'] = df_live['Close'].pct_change(5)
                                 df_live['Volume_Spike_Ratio'] = df_live['Volume'] / (df_live['Volume'].rolling(20).mean().replace(0, 1))
                                 df_live['Market_Volatility_Index'] = 15.0
-                                df_live['Month'] = df_live.index.dt.month
+                                df_live['Month'] = pd.to_datetime(df_live.index).month
                                 
                                 latest_row = df_live.dropna().tail(1)
                                 if not latest_row.empty:
