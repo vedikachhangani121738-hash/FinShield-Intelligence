@@ -186,7 +186,7 @@ if data_source == "Validation Benchmark File":
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
     else:
         st.sidebar.error("❌ Benchmark dataset not found.")
 
@@ -257,7 +257,7 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
@@ -302,7 +302,7 @@ else:
                     X_test_shock['Lagged_Return_5D'] = -0.07
                 if 'Volume_Spike_Ratio' in X_test_shock.columns:
                     X_test_shock['Volume_Spike_Ratio'] = 1.9
-            elif news_scenario == "🏛️ Earnings Guidance Miss / Panic Selling":
+            elif news_scenario == "🏛️️ Earnings Guidance Miss / Panic Selling":
                 if 'Lagged_Return_5D' in X_test_shock.columns:
                     X_test_shock['Lagged_Return_5D'] = -0.10
                 if 'Volume_Spike_Ratio' in X_test_shock.columns:
@@ -496,7 +496,8 @@ else:
                 with st.spinner("Analyzing portfolio telemetry across selected assets..."):
                     for t_sym in tickers_list:
                         try:
-                            df_live = yf.download(t_sym, period="6mo", interval="1d", progress=False)
+                            # FIXED: Increased period from "6mo" to "2y" so SMA_200 has enough trading days
+                            df_live = yf.download(t_sym, period="max", interval="1d", progress=False)
                             if not df_live.empty:
                                 if isinstance(df_live.columns, pd.MultiIndex):
                                     df_live.columns = df_live.columns.get_level_values(0)
@@ -512,7 +513,7 @@ else:
                                 
                                 df_live['SMA_50'] = df_live['Close'].rolling(50).mean()
                                 df_live['SMA_200'] = df_live['Close'].rolling(200).mean()
-                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df_live['Volume'].rolling(20).sum().replace(0, 1))
+                                df_live['VWAP_20D'] = (df_live['Close'] * df_live['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
                                 df_live['Beta_60D'] = 1.0
                                 df_live['Vol_x_Beta'] = df_live['Volatility_30D'] * df_live['Beta_60D']
                                 df_live['Lagged_Return_5D'] = df_live['Close'].pct_change(5)
