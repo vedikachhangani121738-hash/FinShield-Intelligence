@@ -25,11 +25,6 @@ st.markdown("""
     .risk-badge-critical {
         animation: pulse-red 2s infinite;
     }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-    <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
     
     html, body, [class*="css"] {
@@ -158,6 +153,16 @@ else:
         "Lagged_Return_5D", "Lagged_Volume_5D", "Volume_Spike_Ratio", "Month"
     ]
 
+# Helper function to load validation dataset safely
+@st.cache_data
+def load_val_data():
+    try:
+        return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
+    except Exception as e:
+        return pd.DataFrame()
+
+val_df = load_val_data()
+
 # -----------------------------------------------------------------------------
 # 3. SIDEBAR TERMINAL CONTROLS & DATA STREAM SELECTION
 # -----------------------------------------------------------------------------
@@ -171,15 +176,6 @@ selected_date = ""
 date_col = ""
 
 if data_source == "Validation Benchmark File":
-    @st.cache_data
-    def load_val_data():
-        try:
-            return pd.read_excel("NIFTY50_Val_Macro_Enhanced (3).xlsx")
-        except Exception as e:
-            st.error(f"❌ Benchmark Dataset Load Error: {e}")
-            return pd.DataFrame()
-    
-    val_df = load_val_data()
     if not val_df.empty:
         ticker_col = "Ticker" if "Ticker" in val_df.columns else val_df.columns[0]
         selected_ticker = st.sidebar.selectbox("Select Benchmark Asset Symbol", val_df[ticker_col].unique())
@@ -191,7 +187,9 @@ if data_source == "Validation Benchmark File":
         
         available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
         selected_date = st.sidebar.selectbox("Valuation Timestamp", available_dates)
-        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+        row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
+    else:
+        st.sidebar.error("❌ Benchmark dataset not found.")
 
 else:
     st.sidebar.markdown("### 🔍 Live Global Ticker Search")
@@ -263,7 +261,7 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
@@ -279,56 +277,72 @@ else:
     is_anomaly = prob >= 0.30
 
     # -------------------------------------------------------------------------
-    # 3.5. INTERACTIVE 'WHAT-IF' MARKET SIMULATOR (SIDEBAR)
+    # FEATURE 1: HEADLINE-DRIVEN "NEWS SHOCK" SIMULATOR (SIDEBAR)
     # -------------------------------------------------------------------------
-    with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
-        st.markdown("Test real-world scenarios in plain English:")
+    with st.sidebar.expander("📰 Headline News Shock Simulator", expanded=True):
+        st.markdown("Test real-world market events instantly:")
         
-        fear_level = st.slider(
-            "Market Fear / Price Swings", 
-            min_value=0.05, max_value=0.80, 
-            value=float(row_data['Volatility_30D'].values[0] if not row_data.empty else 0.20),
-            step=0.05,
-            help="How wild or unstable are the daily price swings?"
-        )
-        
-        recent_trend = st.slider(
-            "Recent Stock Drop / Gain (Past 5 Days)", 
-            min_value=-0.15, max_value=0.15, 
-            value=float(row_data['Lagged_Return_5D'].values[0] if not row_data.empty else 0.0),
-            step=0.01,
-            format="%.1f%%",
-            help="Has the stock been crashing or rallying recently?"
-        )
-        
-        selling_rush = st.slider(
-            "Abnormal Selling Volume", 
-            min_value=0.5, max_value=3.0, 
-            value=float(row_data['Volume_Spike_Ratio'].values[0] if not row_data.empty else 1.0),
-            step=0.1,
-            help="Are people suddenly rushing to buy or sell?"
+        news_scenario = st.selectbox(
+            "Select Breaking Headline",
+            [
+                "Normal Market Conditions",
+                "🛢️ Crude Oil Spikes Above $100/Barrel",
+                "📉 RBI Unexpectedly Hikes Rates by 50 bps",
+                "🏛️ Earnings Guidance Miss / Panic Selling",
+                "🌍 Geopolitical Escalation & Flight-to-Safety"
+            ]
         )
 
         if not row_data.empty:
             X_test_shock = X_input.copy()
-            if 'Volatility_30D' in X_test_shock.columns:
-                X_test_shock['Volatility_30D'] = fear_level
-            if 'Lagged_Return_5D' in X_test_shock.columns:
-                X_test_shock['Lagged_Return_5D'] = recent_trend
-            if 'Volume_Spike_Ratio' in X_test_shock.columns:
-                X_test_shock['Volume_Spike_Ratio'] = selling_rush
-                
+            
+            # Apply macro narrative shocks to underlying ML features
+            if news_scenario == "🛢️ Crude Oil Spikes Above $100/Barrel":
+                if 'Volatility_30D' in X_test_shock.columns:
+                    X_test_shock['Volatility_30D'] *= 1.45
+                if 'Lagged_Return_5D' in X_test_shock.columns:
+                    X_test_shock['Lagged_Return_5D'] = -0.05
+                if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                    X_test_shock['Volume_Spike_Ratio'] = 2.1
+            elif news_scenario == "📉 RBI Unexpectedly Hikes Rates by 50 bps":
+                if 'Volatility_30D' in X_test_shock.columns:
+                    X_test_shock['Volatility_30D'] *= 1.30
+                if 'Lagged_Return_5D' in X_test_shock.columns:
+                    X_test_shock['Lagged_Return_5D'] = -0.07
+                if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                    X_test_shock['Volume_Spike_Ratio'] = 1.9
+            elif news_scenario == "🏛️ Earnings Guidance Miss / Panic Selling":
+                if 'Lagged_Return_5D' in X_test_shock.columns:
+                    X_test_shock['Lagged_Return_5D'] = -0.10
+                if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                    X_test_shock['Volume_Spike_Ratio'] = 2.8
+                if 'RSI_14' in X_test_shock.columns:
+                    X_test_shock['RSI_14'] = 22.0
+            elif news_scenario == "🌍 Geopolitical Escalation & Flight-to-Safety":
+                if 'Volatility_30D' in X_test_shock.columns:
+                    X_test_shock['Volatility_30D'] *= 1.75
+                if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                    X_test_shock['Volume_Spike_Ratio'] = 2.5
+            
+            # Recalculate dependent composite feature if present
+            if 'Vol_x_Beta' in X_test_shock.columns and 'Volatility_30D' in X_test_shock.columns:
+                beta_val = X_test_shock['Beta_60D'].values[0] if 'Beta_60D' in X_test_shock.columns else 1.0
+                X_test_shock['Vol_x_Beta'] = X_test_shock['Volatility_30D'].values[0] * beta_val
+
             simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
             
             st.markdown("---")
             st.metric(
                 label="Simulated Crash Risk", 
                 value=f"{simulated_prob*100:.1f}%", 
-                delta=f"{(simulated_prob - prob)*100:+.1f}%"
+                delta=f"{(simulated_prob - prob)*100:+.1f}%",
+                delta_color="inverse"
             )
     
-    tab1, tab2, tab3 = st.tabs([
+    # Navigation Tabs (Including Feature 2: Portfolio Heatmap)
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🛡️ Executive Risk Scorecard", 
+        "💼 Portfolio Sleep-at-Night Heatmap",
         "📊 Technical Telemetry & Signals", 
         "🧠 Model Attribution & Diagnostics (XAI)"
     ])
@@ -403,6 +417,31 @@ else:
                 st.markdown('<div class="risk-badge-critical">🚨 CRITICAL TAIL-RISK ANOMALY DETECTED</div>', unsafe_allow_html=True)
                 st.progress(min(int(prob * 100), 100))
                 st.error("**Directive**: Model signals heightened probability of severe downside drawdown (>10% drop within 5-10 trading sessions). Preemptive risk reduction recommended.")
+                
+                # -------------------------------------------------------------
+                # FEATURE 3: AUTOMATED DEFENSIVE SWAP RECOMMENDATIONS
+                # -------------------------------------------------------------
+                st.markdown("#### 🔄 Automated Defensive Swap Recommendation")
+                if not val_df.empty and ticker_col in val_df.columns:
+                    # Scan validation dataset for lowest risk alternative asset
+                    latest_date_val = val_df[date_col].max() if date_col in val_df.columns else None
+                    if latest_date_val is not None:
+                        snapshot_df = val_df[val_df[date_col] == latest_date_val]
+                        if not snapshot_df.empty:
+                            safe_candidates = []
+                            for t in snapshot_df[ticker_col].unique():
+                                if t != selected_ticker:
+                                    t_row = snapshot_df[snapshot_df[ticker_col] == t].reindex(columns=feature_cols).fillna(0)
+                                    if not t_row.empty:
+                                        t_prob = float(model.predict_proba(t_row.values)[:, 1][0])
+                                        safe_candidates.append((t, t_prob))
+                            if safe_candidates:
+                                safe_candidates.sort(key=lambda x: x[1])
+                                best_swap, best_swap_prob = safe_candidates[0]
+                                st.info(f"💡 **Reallocation Suggestion**: Consider rotating 20% of your position into **{best_swap}** (Current Risk Score: `{best_swap_prob*100:.1f}%`) to lower overall portfolio tail-risk.")
+                else:
+                    st.info("💡 **Reallocation Suggestion**: Consider rotating into a defensive low-beta index fund or cash equivalent.")
+
             elif prob >= 0.15:
                 st.markdown('<div class="risk-badge-elevated">⚠ ELEVATED WATCHLIST STATUS</div>', unsafe_allow_html=True)
                 st.progress(min(int(prob * 100), 100))
@@ -416,7 +455,7 @@ else:
             st.caption("""
             * **Operational Timing**: Inference executes post-market close on Day $T$, using completed session variables to project tail-risk probability for Day $T+1$.
             * **Model Threshold**: 30% Probability.
-            * **Calibration Rationale**: Optimized on historical NIFTY50 market crash cycles to capture tail-risk while mitigating false positives.
+            * **Calibration Rationale**: Optimized on historical market crash cycles to capture tail-risk while mitigating false positives.
             """)
 
         with col_right:
@@ -444,9 +483,54 @@ else:
                 st.info("No abnormal risk factor surges detected across evaluated features for this session.")
 
     # -------------------------------------------------------------------------
-    # TAB 2: TECHNICAL TELEMETRY & SIGNALS
+    # TAB 2: PORTFOLIO "SLEEP-AT-NIGHT" HEATMAP
     # -------------------------------------------------------------------------
     with tab2:
+        st.subheader("💼 Multi-Asset Portfolio 'Sleep-at-Night' Heatmap")
+        st.markdown("Monitor your entire basket of equities simultaneously with traffic-light risk classification:")
+
+        if not val_df.empty and ticker_col in val_df.columns and date_col in val_df.columns:
+            latest_dt = val_df[date_col].max()
+            current_snapshot = val_df[val_df[date_col] == latest_dt]
+            
+            portfolio_records = []
+            for t_sym in current_snapshot[ticker_col].unique():
+                t_row = current_snapshot[current_snapshot[ticker_col] == t_sym].reindex(columns=feature_cols).fillna(0)
+                if not t_row.empty:
+                    t_p = float(model.predict_proba(t_row.values)[:, 1][0])
+                    status = "🟢 Safe" if t_p < 0.15 else ("🟡 Watchlist" if t_p < 0.30 else "🔴 Critical Risk")
+                    portfolio_records.append({
+                        "Asset Symbol": t_sym,
+                        "Crash Probability": f"{t_p*100:.1f}%",
+                        "Risk Status": status,
+                        "_raw_prob": t_p
+                    })
+            
+            if portfolio_records:
+                port_df = pd.DataFrame(portfolio_records)
+                avg_port_risk = port_df["_raw_prob"].mean() * 100
+                
+                # Aggregate Portfolio Safety Card
+                col_p1, col_p2 = st.columns([1, 2])
+                with col_p1:
+                    st.metric(label="PORTFOLIO SAFETY INDEX", value=f"{100 - avg_port_risk:.1f}/100", delta=f"{avg_port_risk:.1f}% Avg Risk")
+                with col_p2:
+                    if avg_port_risk < 15:
+                        st.success("🟢 **Portfolio Status: Robust & Stable.** Asset allocation is well within safe historical parameters.")
+                    elif avg_port_risk < 30:
+                        st.warning("🟡 **Portfolio Status: Moderate Alert.** Volatility is creeping up across selected positions.")
+                    else:
+                        st.danger("🔴 **Portfolio Status: High Tail-Risk Warning.** Multiple holdings exhibit high downside vulnerability.")
+
+                st.markdown("---")
+                st.dataframe(port_df.drop(columns=["_raw_prob"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("Portfolio heatmap is optimized for benchmark validation datasets. Switch data engine to 'Validation Benchmark File' in sidebar to view.")
+
+    # -------------------------------------------------------------------------
+    # TAB 3: TECHNICAL TELEMETRY & SIGNALS
+    # -------------------------------------------------------------------------
+    with tab3:
         st.subheader("Categorized Technical Indicator Telemetry Matrix")
         
         col_t1, col_t2, col_t3, col_t4 = st.columns(4)
@@ -504,9 +588,9 @@ else:
                     st.info("Volume/Volatility trend telemetry stream unavailable.")
 
     # -------------------------------------------------------------------------
-    # TAB 3: MODEL ATTRIBUTION & DIAGNOSTICS (XAI)
+    # TAB 4: MODEL ATTRIBUTION & DIAGNOSTICS (XAI)
     # -------------------------------------------------------------------------
-    with tab3:
+    with tab4:
         st.subheader("Explainable AI (XAI) & Model Diagnostics")
         st.markdown("Quantifying global model weightings alongside local feature value deviations to provide complete auditability.")
         
