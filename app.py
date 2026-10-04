@@ -8,7 +8,7 @@ import joblib
 from datetime import datetime
 
 # ==========================================
-# 1. PAGE CONFIGURATION & TIMES NEW ROMAN CSS
+# 1. PAGE CONFIGURATION & ADVANCED UI CSS
 # ==========================================
 st.set_page_config(
     page_title="FinShield Intelligence | Global Terminal", 
@@ -23,7 +23,7 @@ st.markdown("""
     html, body, [data-testid="stAppViewContainer"], p, span, label, .stTextInput, .stSelectbox, .stNumberInput, div {
         font-family: 'Times New Roman', Times, serif !important;
     }
-    [data-testid="stAppViewContainer"] { background-color: #F3F4F6; }
+    [data-testid="stAppViewContainer"] { background-color: #F8FAFC; }
     [data-testid="stSidebar"] { background-color: #0A2540 !important; }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; font-family: 'Times New Roman', Times, serif !important; }
     
@@ -41,11 +41,11 @@ st.markdown("""
     }
     
     .blue-card { 
-        background-color: #0A2540; 
+        background: linear-gradient(135deg, #0A2540 0%, #1E3A8A 100%);
         color: #FFFFFF; 
         padding: 1.5rem; 
-        border-radius: 12px; 
-        box-shadow: 0 10px 15px rgba(0,0,0,0.1); 
+        border-radius: 14px; 
+        box-shadow: 0 10px 20px rgba(10,37,64,0.15); 
         margin-bottom: 1rem; 
         border-left: 6px solid; 
         font-family: 'Times New Roman', Times, serif !important;
@@ -55,6 +55,11 @@ st.markdown("""
         font-family: 'Times New Roman', Times, serif !important;
         margin: 0; 
     }
+    
+    .badge-safe { background-color: #D1FAE5; color: #065F46; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
+    .badge-danger { background-color: #FEE2E2; color: #991B1B; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
+    .badge-winner { background-color: #FEF3C7; color: #92400E; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; display: inline-block; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    
     .js-plotly-plot { margin: 0 auto; }
 </style>
 """, unsafe_allow_html=True)
@@ -138,7 +143,7 @@ popular_tickers = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK
 # ==========================================
 with st.sidebar:
     st.markdown("<h2>🛡️️ FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v4.0</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v4.2</p>", unsafe_allow_html=True)
     st.markdown("---")
     
     app_mode = st.radio(
@@ -156,7 +161,7 @@ with st.sidebar:
     st.caption("🟢 Universal yFinance Live Feed: **ACTIVE**")
 
 # ==========================================
-# 5. MODULE EXECUTIONS (DROPDOWN + LIVE + TIMES NEW ROMAN)
+# 5. MODULE EXECUTIONS (VISUALLY ENHANCED)
 # ==========================================
 
 # --- MODULE 1 ---
@@ -185,7 +190,7 @@ if "1." in app_mode:
             
             cutoff = 30.0
             risk_color = "#00E676" if risk_score < cutoff else "#FF1744"
-            risk_status = "SAFE (LOW RISK)" if risk_score < cutoff else "DANGER (HIGH RISK)"
+            risk_badge = '<span class="badge-safe">SAFE (LOW RISK)</span>' if risk_score < cutoff else '<span class="badge-danger">DANGER (HIGH RISK)</span>'
 
             st.markdown(f"""
             <div class="blue-card" style="border-left-color: {risk_color};">
@@ -194,7 +199,7 @@ if "1." in app_mode:
                 <hr style="border-color: #1E293B;">
                 <p style="font-size: 1rem; color: #94A3B8 !important;">30-DAY CRASH PROBABILITY</p>
                 <h2 style="font-size: 3rem; color: {risk_color} !important;">{risk_score}%</h2>
-                <p style="font-size: 1rem; font-weight: bold; color: {risk_color} !important;">{risk_status}</p>
+                <div style="margin-top: 8px;">{risk_badge}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -226,10 +231,10 @@ if "1." in app_mode:
     else:
         st.error(f"Unable to pull live market data for symbol '{ticker}'.")
 
-# --- MODULE 2 ---
+# --- MODULE 2: TECHNICAL TELEMETRY ---
 elif "2." in app_mode:
-    st.markdown("<h1>📊 Technical Telemetry & Indicators</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts from live feeds.</p>", unsafe_allow_html=True)
+    st.markdown("<h1>📊 Technical Telemetry & Momentum Health</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect interactive live moving averages, RSI momentum, and MACD divergence telemetry.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
@@ -245,10 +250,35 @@ elif "2." in app_mode:
         df = compute_technical_indicators(df_raw)
         latest_rsi, latest_macd, latest_sma20, latest_close = df['RSI'].iloc[-1], df['MACD'].iloc[-1], df['SMA_20'].iloc[-1], df['Close'].iloc[-1]
         
+        # Visual Health Scorecards
         m1, m2, m3 = st.columns(3)
-        m1.metric("RSI (14)", f"{latest_rsi:.2f}", delta="Overbought >70 | Oversold <30" if latest_rsi > 70 or latest_rsi < 30 else "Neutral")
-        m2.metric("MACD Status", f"{latest_macd:.2f}", delta="Bullish" if latest_macd > 0 else "Bearish")
-        m3.metric("SMA 20 vs Price", "Bullish Trend" if latest_close > latest_sma20 else "Bearish Trend")
+        with m1:
+            rsi_status = "Overbought ⚡" if latest_rsi > 70 else ("Oversold 🛡️" if latest_rsi < 30 else "Neutral ⚖️")
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #3B82F6; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">RSI MOMENTUM (14)</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{latest_rsi:.2f}</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #3B82F6;">{rsi_status}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with m2:
+            macd_status = "Bullish Momentum 🚀" if latest_macd > 0 else "Bearish Pressure 📉"
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #10B981; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">MACD DIVERGENCE</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{latest_macd:.2f}</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #10B981;">{macd_status}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with m3:
+            trend_status = "Bullish Trend 📈" if latest_close > latest_sma20 else "Bearish Trend 📉"
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #8B5CF6; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">SMA 20 VS PRICE</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">₹{latest_close:,.2f}</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #8B5CF6;">{trend_status}</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("---")
         fig_ma = go.Figure()
@@ -303,16 +333,37 @@ elif "3." in app_mode:
     if category_filter != "All Categories":
         filtered_df = filtered_df[filtered_df['Category'] == category_filter]
         
-    # UI Summary Cards
+    # Styled Summary Cards
     if not filtered_df.empty:
         top_fund = filtered_df.loc[filtered_df['1Y Return (%)'].idxmax()]
         avg_return = filtered_df['1Y Return (%)'].mean()
         avg_expense = filtered_df['Expense Ratio (%)'].mean()
         
         mc1, mc2, mc3 = st.columns(3)
-        mc1.metric("Filtered Schemes Count", len(filtered_df), delta=f"Category: {category_filter}")
-        mc2.metric("Top 1Y Performer", f"{top_fund['Fund Name']}", delta=f"{top_fund['1Y Return (%)']}%")
-        mc3.metric("Avg. Expense Ratio", f"{avg_expense:.2f}%", delta=f"Avg Return: {avg_return:.1f}%", delta_color="inverse")
+        with mc1:
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #0A2540; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">FILTERED SCHEMES</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{len(filtered_df)}</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #0A2540;">Category: {category_filter}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with mc2:
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #059669; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">TOP 1Y PERFORMER</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{top_fund['Fund Name']}</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #059669;">+{top_fund['1Y Return (%)']}% Return</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with mc3:
+            st.markdown(f"""
+            <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #D97706; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <p style="color: #64748B; margin: 0; font-size: 0.9rem;">AVG EXPENSE RATIO</p>
+                <h3 style="color: #0F172A; margin: 0; font-size: 1.8rem;">{avg_expense:.2f}%</h3>
+                <p style="margin: 4px 0 0 0; font-weight: bold; color: #D97706;">Avg Return: {avg_return:.1f}%</p>
+            </div>
+            """, unsafe_allow_html=True)
         st.markdown("---")
 
     st.markdown(f"### 📋 Institutional Screener Database")
@@ -341,11 +392,11 @@ elif "3." in app_mode:
 
     col1, col2 = st.columns(2)
     with col1:
-        fig_scatter = px.scatter(filtered_df if not filtered_df.empty else mf_database, x='Risk Score', y='1Y Return (%)', size='Alpha', color='Category', hover_name='Fund Name', title="Risk vs Return Matrix (Bubble size = Alpha)")
+        fig_scatter = px.scatter(filtered_df if not filtered_df.empty else mf_database, x='Risk Score', y='1Y Return (%)', size='Alpha', color='Category', hover_name='Fund Name', title="Risk vs Return Matrix (Bubble size = Alpha)", color_discrete_sequence=px.colors.qualitative.Bold)
         fig_scatter.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_scatter, use_container_width=True)
     with col2:
-        fig_bar = px.bar(filtered_df if not filtered_df.empty else mf_database, x='Fund Name', y='Expense Ratio (%)', color='Category', title="Expense Ratio Comparison")
+        fig_bar = px.bar(filtered_df if not filtered_df.empty else mf_database, x='Fund Name', y='Expense Ratio (%)', color='Category', title="Expense Ratio Comparison", color_discrete_sequence=px.colors.qualitative.Pastel)
         fig_bar.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -360,6 +411,21 @@ elif "4." in app_mode:
     
     d1 = mf_database[mf_database['Fund Name'] == fund1_name].iloc[0]
     d2 = mf_database[mf_database['Fund Name'] == fund2_name].iloc[0]
+    
+    # Automated Winner Calculation
+    score1 = (d1['1Y Return (%)'] * 0.4) + (d1['Alpha'] * 3) - (d1['Expense Ratio (%)'] * 10)
+    score2 = (d2['1Y Return (%)'] * 0.4) + (d2['Alpha'] * 3) - (d2['Expense Ratio (%)'] * 10)
+    winner = fund1_name if score1 >= score2 else fund2_name
+    
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem 1.5rem; border-radius: 10px; border: 2px dashed #0A2540; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h3 style="margin: 0; color: #0A2540;">🏆 Automated Comparative Winner</h3>
+            <p style="margin: 0; color: #64748B;">Based on risk-adjusted return, alpha generation, and cost efficiency.</p>
+        </div>
+        <div><span class="badge-winner">🥇 {winner}</span></div>
+    </div>
+    """, unsafe_allow_html=True)
     
     colA, colB = st.columns([1, 1.5])
     with colA:
@@ -379,7 +445,7 @@ elif "4." in app_mode:
 # --- MODULE 5 ---
 elif "5." in app_mode:
     st.markdown("<h1>🗂️ Portfolio Overlap & Asset Allocation Analysis</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and cross-asset allocations.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and interactive risk-return asset allocations.</p>", unsafe_allow_html=True)
     
     col_alloc, col_donut = st.columns([1.5, 1.2])
     
@@ -394,6 +460,18 @@ elif "5." in app_mode:
             st.warning(f"Total allocation is {total_w}%. Recommended total is exactly 100%.")
         else:
             st.success("Allocation perfectly balanced.")
+            
+        # Interactive Risk-Return Projection Metric
+        expected_return = (w_equity * 0.14) + (w_mid * 0.18) + (w_debt * 0.07)
+        expected_volatility = (w_equity * 0.12) + (w_mid * 0.22) + (w_debt * 0.04)
+        
+        st.markdown(f"""
+        <div style="background: white; padding: 1rem; border-radius: 10px; border-left: 5px solid #10B981; margin-top: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <p style="color: #64748B; margin: 0; font-size: 0.9rem;">PORTFOLIO SIMULATION METRICS</p>
+            <h4 style="color: #0F172A; margin: 4px 0;">Expected Annual Return: <span style="color: #059669;">+{expected_return:.2f}%</span></h4>
+            <h4 style="color: #0F172A; margin: 4px 0;">Projected Portfolio Volatility: <span style="color: #D97706;">{expected_volatility:.2f}%</span></h4>
+        </div>
+        """, unsafe_allow_html=True)
         
     with col_donut:
         alloc_df = pd.DataFrame({'Asset Class': ['Large Cap', 'Mid/Small Cap', 'Debt'], 'Weight': [w_equity, w_mid, w_debt]})
