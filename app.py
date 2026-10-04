@@ -210,48 +210,88 @@ def compute_technical_indicators(df):
     df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
     return df
 
-def generate_pdf_report(ticker, risk_score, ltp, change_pct):
+def generate_pdf_report(ticker, risk_score, ltp, change_pct, df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     
+    # Extract robust indicators from df for deep insights
+    returns = df['Close'].pct_change().dropna() if 'Close' in df else pd.Series([0])
+    annual_vol = float(returns.std() * np.sqrt(252) * 100)
+    rsi_val = float(df['RSI'].iloc[-1]) if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0
+    sma20 = float(df['SMA_20'].iloc[-1]) if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else ltp
+    trend_status = "BULLISH (Price > 20 SMA)" if ltp > sma20 else "BEARISH (Price < 20 SMA)"
+    
+    # Header Banner
     c.setFillColorRGB(0.04, 0.15, 0.25)
-    c.rect(0, height - 80, width, 80, fill=1, stroke=0)
+    c.rect(0, height - 90, width, 90, fill=1, stroke=0)
     c.setFillColorRGB(1, 1, 1)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, height - 42, "FinShield Intelligence | Institutional Risk Report")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, height - 38, "FINSHIELD INTELLIGENCE | EXECUTIVE RISK & CRASH FORECAST")
     c.setFont("Helvetica", 10)
-    c.drawString(50, height - 60, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Asset: {ticker}")
+    c.drawString(40, height - 58, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Target Asset: {ticker}")
+    c.drawString(40, height - 74, "Classification: CONFIDENTIAL - Quantitative Institutional Telemetry")
     
+    # Section 1: Executive Valuation Summary
     c.setFillColorRGB(0.1, 0.1, 0.1)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, height - 120, f"Executive Summary: {ticker}")
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, height - 120, "1. Executive Asset Valuation & Crash Probability")
     
-    c.setFont("Helvetica", 11)
-    y_pos = height - 155
-    c.drawString(50, y_pos, f"• Current Market Price (LTP): ₹{ltp:,.2f}")
-    y_pos -= 25
-    c.drawString(50, y_pos, f"• Daily Price Change: {change_pct:+.2f}%")
-    y_pos -= 25
-    c.drawString(50, y_pos, f"• Model 30-Day Crash Risk Probability: {risk_score:.1f}%")
-    y_pos -= 25
-    risk_status = "SAFE (LOW RISK)" if risk_score < 30 else "DANGER (HIGH RISK)"
-    c.drawString(50, y_pos, f"• Risk Classification: {risk_status}")
-    
-    y_pos -= 45
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y_pos, "Telemetry & Methodology Note:")
-    y_pos -= 20
     c.setFont("Helvetica", 10)
-    c.drawString(50, y_pos, "This report evaluates quantitative volatility, momentum divergence, and machine learning")
-    y_pos -= 15
-    c.drawString(50, y_pos, "risk classification scores extracted from live global data feeds via yFinance.")
+    y_pos = height - 145
+    c.drawString(50, y_pos, f"• Last Traded Price (LTP): ₹{ltp:,.2f} ({change_pct:+.2f}% Daily Change)")
+    y_pos -= 20
+    c.drawString(50, y_pos, f"• 30-Day Model Crash Risk Probability: {risk_score:.1f}%")
+    y_pos -= 20
+    risk_status = "SAFE (LOW DISTRESS PROBABILITY)" if risk_score < 30 else "DANGER (HIGH DISTRESS PROBABILITY)"
+    c.drawString(50, y_pos, f"• Risk Classification Status: {risk_status}")
     
+    # Section 2: Quantitative Telemetry & Momentum
+    y_pos -= 40
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, y_pos, "2. Quantitative Telemetry & Market Momentum")
+    
+    y_pos -= 25
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y_pos, f"• Annualized Volatility (1-Year Rolling): {annual_vol:.2f}%")
+    y_pos -= 20
+    c.drawString(50, y_pos, f"• 14-Period RSI Momentum Score: {rsi_val:.2f} ({'Overbought' if rsi_val > 70 else 'Oversold' if rsi_val < 30 else 'Neutral Zone'})")
+    y_pos -= 20
+    c.drawString(50, y_pos, f"• Technical Trend Structure: {trend_status}")
+    
+    # Section 3: Institutional Recommendation & Risk Action
+    y_pos -= 40
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(40, y_pos, "3. Institutional Risk Management Recommendation")
+    
+    y_pos -= 25
+    c.setFont("Helvetica-Bold", 10)
+    if risk_score < 30:
+        c.setFillColorRGB(0.02, 0.4, 0.2)
+        c.drawString(50, y_pos, "VERDICT: ACCUMULATE / HOLD WITH STANDARD STOP LOSS")
+        y_pos -= 18
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y_pos, "The machine learning model indicates low systemic crash risk. Maintain long exposure,")
+        y_pos -= 15
+        c.drawString(50, y_pos, "ensuring standard trailing stop-losses are set 5% below the 20-day moving average.")
+    else:
+        c.setFillColorRGB(0.7, 0.1, 0.1)
+        c.drawString(50, y_pos, "VERDICT: DEFENSIVE EXIT / HEDGING RECOMMENDED")
+        y_pos -= 18
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y_pos, "Elevated crash probability detected via volatility expansion and momentum divergence.")
+        y_pos -= 15
+        c.drawString(50, y_pos, "Recommended action: Reduce portfolio weight, lock in profits, or migrate capital to liquid cash.")
+
+    # Footer Disclaimer
     c.setStrokeColorRGB(0.8, 0.8, 0.8)
-    c.line(50, 70, width - 50, 70)
+    c.line(40, 60, width - 40, 60)
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColorRGB(0.5, 0.5, 0.5)
-    c.drawString(50, 50, "Confidential - For Academic Project Defense & Internal Research Use Only.")
+    c.drawString(40, 42, "FinShield Intelligence Terminal | Powered by yFinance & Random Forest ML Engine.")
+    c.drawString(40, 30, "For academic project defense and institutional portfolio risk evaluation use only.")
     
     c.showPage()
     c.save()
@@ -376,7 +416,8 @@ if "1." in app_mode:
             </div>
             """, unsafe_allow_html=True)
             
-            pdf_buffer = generate_pdf_report(ticker, risk_score, ltp, change_pct)
+            # Pass df into the upgraded PDF generator
+            pdf_buffer = generate_pdf_report(ticker, risk_score, ltp, change_pct, df)
             st.download_button(
                 label="📥 Download Executive PDF Report",
                 data=pdf_buffer,
