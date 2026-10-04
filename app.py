@@ -23,7 +23,7 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #0A2540 !important; }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     h1, h2, h3 { color: #0A2540; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 700; }
-    .stTextInput > div > div > input { border-radius: 8px; border: 2px solid #0A2540; padding: 10px; font-weight: bold; }
+    .stTextInput > div > div > input, .stSelectbox > div > div > div { border-radius: 8px; border: 2px solid #0A2540; font-weight: bold; }
     .white-card { background-color: #FFFFFF; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E5E7EB; margin-bottom: 1rem; }
     .blue-card { background-color: #0A2540; color: #FFFFFF; padding: 1.5rem; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 1rem; border-left: 6px solid; }
     .blue-card h3, .blue-card p { color: #FFFFFF !important; margin: 0; }
@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. GLOBAL LIVE YFINANCE & ML ENGINE PIPELINE
+# 2. GLOBAL LIVE YFINANCE & PIPELINES
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_live_data(ticker):
@@ -53,8 +53,7 @@ def fetch_live_data(ticker):
 def calculate_crash_risk(df):
     try:
         rf_model = joblib.load('random_forest_crash_model.joblib') 
-        risk_prob = 15.0 
-        return risk_prob
+        return 15.0 
     except FileNotFoundError:
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std() * np.sqrt(252) * 100  
@@ -63,33 +62,28 @@ def calculate_crash_risk(df):
         return max(2.0, min(98.0, risk))
 
 def compute_technical_indicators(df):
-    """Calculates RSI, MACD, and Moving Averages for Technical Telemetry"""
     df = df.copy()
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
     df['SMA_50'] = df['Close'].rolling(window=50).mean()
-    
-    # RSI Calculation
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
-    
-    # MACD Calculation
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
     exp2 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = exp1 - exp2
     df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
     return df
 
-mf_data = pd.DataFrame({
-    'Fund Name': ['Quant Active', 'Parag Parikh Flexi', 'SBI Bluechip', 'Nippon Small Cap'],
-    'Category': ['Multi Cap', 'Flexi Cap', 'Large Cap', 'Small Cap'],
-    '1Y Return (%)': [32.4, 24.5, 18.2, 45.1],
-    'Alpha': [5.2, 3.8, 1.1, 7.5],
-    'Beta': [1.1, 0.85, 0.95, 1.25],
-    'Expense Ratio (%)': [0.58, 0.65, 1.10, 0.75],
-    'Risk Score': [65, 40, 35, 85]
+mf_database = pd.DataFrame({
+    'Fund Name': ['Quant Active Fund', 'Parag Parikh Flexi Cap', 'SBI Bluechip Fund', 'Nippon India Small Cap', 'HDFC Mid-Cap Opportunities'],
+    'Category': ['Multi Cap', 'Flexi Cap', 'Large Cap', 'Small Cap', 'Mid Cap'],
+    '1Y Return (%)': [32.4, 24.5, 18.2, 45.1, 38.6],
+    'Alpha': [5.2, 3.8, 1.1, 7.5, 6.2],
+    'Beta': [1.1, 0.85, 0.95, 1.25, 1.15],
+    'Expense Ratio (%)': [0.58, 0.65, 1.10, 0.75, 0.92],
+    'Risk Score': [65, 40, 35, 85, 72]
 })
 
 # ==========================================
@@ -97,7 +91,7 @@ mf_data = pd.DataFrame({
 # ==========================================
 with st.sidebar:
     st.markdown("<h2>🛡️ FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v3.2</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v3.5</p>", unsafe_allow_html=True)
     st.markdown("---")
     
     app_mode = st.radio(
@@ -115,36 +109,32 @@ with st.sidebar:
     st.caption("🟢 Universal yFinance Feed: **ACTIVE**")
 
 # ==========================================
-# 4. MODULE 1: GLOBAL PREDICTOR EXECUTION
+# 4. MODULE EXECUTIONS
 # ==========================================
+
+# --- MODULE 1 ---
 if "1." in app_mode:
     st.markdown("<h1>📉 Global Stock Crash-Risk Prediction Engine</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Search any global stock or asset ticker linked directly to live market feeds.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
-        raw_ticker = st.text_input("🔍 Search Any Global Ticker (e.g., RELIANCE.NS, AAPL, TSLA, TCS.NS):", value="RELIANCE.NS")
+        raw_ticker = st.text_input("🔍 Search Any Global Ticker:", value="RELIANCE.NS")
         ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
 
     df = fetch_live_data(ticker)
     
     if not df.empty and len(df) > 5:
         col_target, col_chart = st.columns([1, 2.5])
-        
         with col_target:
             ltp = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((ltp - prev_close) / prev_close) * 100
-            
             risk_score = round(calculate_crash_risk(df), 1)
             
             cutoff = 30.0
-            if risk_score < cutoff:
-                risk_color = "#00E676"  
-                risk_status = "SAFE (LOW RISK)"
-            else:
-                risk_color = "#FF1744"  
-                risk_status = "DANGER (HIGH RISK)"
+            risk_color = "#00E676" if risk_score < cutoff else "#FF1744"
+            risk_status = "SAFE (LOW RISK)" if risk_score < cutoff else "DANGER (HIGH RISK)"
 
             st.markdown(f"""
             <div class="blue-card" style="border-left-color: {risk_color};">
@@ -163,11 +153,7 @@ if "1." in app_mode:
                 x=df['Date'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
                 increasing_line_color='#00E676', decreasing_line_color='#FF1744'
             )])
-            fig_candle.update_layout(
-                title=f"Live Price Action - {ticker} (Last 6 Months)", 
-                margin=dict(l=20, r=20, t=40, b=20), height=350,
-                xaxis_rangeslider_visible=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
-            )
+            fig_candle.update_layout(title=f"Live Price Action - {ticker}", margin=dict(l=20, r=20, t=40, b=20), height=350, xaxis_rangeslider_visible=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_candle, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -175,10 +161,7 @@ if "1." in app_mode:
         with c1:
             st.markdown('<div class="white-card">', unsafe_allow_html=True)
             st.markdown("### ⚙️ Feature Importance (SHAP)")
-            features = pd.DataFrame({
-                'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'],
-                'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]
-            }).sort_values(by='Weight', ascending=True)
+            features = pd.DataFrame({'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'], 'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]}).sort_values(by='Weight', ascending=True)
             fig_bar = px.bar(features, x='Weight', y='Feature', orientation='h', color='Weight', color_continuous_scale='Blues')
             fig_bar.update_layout(height=250, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_bar, use_container_width=True)
@@ -187,33 +170,21 @@ if "1." in app_mode:
         with c2:
             st.markdown('<div class="white-card">', unsafe_allow_html=True)
             fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=risk_score,
+                mode="gauge+number", value=risk_score,
                 number={'suffix': "%", 'font': {'size': 45, 'color': risk_color}},
                 title={'text': f"{ticker} Distress Gauge", 'font': {'size': 16, 'color': 'gray'}},
-                gauge={
-                    'axis': {'range': [0, 100], 'tickwidth': 1},
-                    'bar': {'color': risk_color, 'thickness': 0.25},
-                    'bgcolor': "#F3F4F6", 
-                    'borderwidth': 0,
-                    'steps': [
-                        {'range': [0, 30], 'color': "rgba(0, 230, 118, 0.1)"}, 
-                        {'range': [30, 100], 'color': "rgba(255, 23, 68, 0.1)"} 
-                    ],
-                }
+                gauge={'axis': {'range': [0, 100], 'tickwidth': 1}, 'bar': {'color': risk_color, 'thickness': 0.25}, 'bgcolor': "#F3F4F6", 'borderwidth': 0, 'steps': [{'range': [0, 30], 'color': "rgba(0, 230, 118, 0.1)"}, {'range': [30, 100], 'color': "rgba(255, 23, 68, 0.1)"}]}
             ))
             fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=10))
             st.plotly_chart(fig_gauge, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error(f"Unable to pull market data for symbol '{ticker}'. Please verify the ticker format.")
+        st.error(f"Unable to pull market data for symbol '{ticker}'.")
 
-# ==========================================
-# 5. MODULE 2: TECHNICAL TELEMETRY
-# ==========================================
+# --- MODULE 2 ---
 elif "2." in app_mode:
     st.markdown("<h1>📊 Technical Telemetry & Indicators</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts for any selected asset.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts.</p>", unsafe_allow_html=True)
     
     search_col, _ = st.columns([1.5, 1.5])
     with search_col:
@@ -221,42 +192,33 @@ elif "2." in app_mode:
         ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
 
     df_raw = fetch_live_data(ticker)
-    
     if not df_raw.empty and len(df_raw) > 30:
         df = compute_technical_indicators(df_raw)
-        
-        # Summary metrics row
-        latest_rsi = df['RSI'].iloc[-1]
-        latest_macd = df['MACD'].iloc[-1]
-        latest_sma20 = df['SMA_20'].iloc[-1]
-        latest_close = df['Close'].iloc[-1]
+        latest_rsi, latest_macd, latest_sma20, latest_close = df['RSI'].iloc[-1], df['MACD'].iloc[-1], df['SMA_20'].iloc[-1], df['Close'].iloc[-1]
         
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="white-card"><h4>RSI (14)</h4><h2 style="color: {"#FF1744" if latest_rsi > 70 or latest_rsi < 30 else "#0A2540"}">{latest_rsi:.2f}</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="white-card"><h4>MACD Status</h4><h2 style="color: {"#00E676" if latest_macd > 0 else "#FF1744"}">{latest_macd:.2f}</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="white-card"><h4>SMA 20 vs Price</h4><h2>{"Bullish" if latest_close > latest_sma20 else "Bearish"}</h2></div>', unsafe_allow_html=True)
         
-        # Interactive Moving Average Chart
         st.markdown('<div class="white-card">', unsafe_allow_html=True)
         fig_ma = go.Figure()
         fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['Close'], name='Close Price', line=dict(color='#0A2540', width=2)))
         fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_20'], name='20 SMA', line=dict(color='#00E676', width=1.5)))
         fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_50'], name='50 SMA', line=dict(color='#FF1744', width=1.5)))
-        fig_ma.update_layout(title=f"{ticker} - Moving Average Crossover (20 & 50 Period)", height=350, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig_ma.update_layout(title=f"{ticker} - Moving Average Crossover", height=350, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_ma, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # RSI & MACD Subplots
         col_rsi, col_macd = st.columns(2)
         with col_rsi:
             st.markdown('<div class="white-card">', unsafe_allow_html=True)
-            fig_rsi = px.line(df, x='Date', y='RSI', title=f"{ticker} - Relative Strength Index (RSI)")
+            fig_rsi = px.line(df, x='Date', y='RSI', title=f"{ticker} - RSI Momentum")
             fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
             fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
             fig_rsi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_rsi, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
-            
         with col_macd:
             st.markdown('<div class="white-card">', unsafe_allow_html=True)
             fig_macd = go.Figure()
@@ -266,11 +228,115 @@ elif "2." in app_mode:
             st.plotly_chart(fig_macd, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error(f"Could not load historical indicator data for '{ticker}'.")
+        st.error("Could not load historical indicator data.")
 
-# ==========================================
-# 6. OTHER MODULE PLACEHOLDERS
-# ==========================================
-else:
-    st.markdown(f"<h1>{app_mode[3:]}</h1>", unsafe_allow_html=True)
-    st.info("This module is currently routing correctly. Select Module 1 or Module 2 from the sidebar to interact with live ticker analytics.")
+# --- MODULE 3 ---
+elif "3." in app_mode:
+    st.markdown("<h1>🛡️ Mutual Fund Risk Screening & Rating Dashboard</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Filter and evaluate institutional mutual funds based on alpha, risk scores, and expense ratios.</p>", unsafe_allow_html=True)
+    
+    st.markdown('<div class="white-card">', unsafe_allow_html=True)
+    st.markdown("### Institutional Mutual Fund Screener Database")
+    st.dataframe(mf_database, hide_index=True, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        fig_scatter = px.scatter(mf_database, x='Risk Score', y='1Y Return (%)', size='Alpha', color='Category', hover_name='Fund Name', title="Risk vs Return Matrix (Bubble size = Alpha)")
+        fig_scatter.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        fig_bar = px.bar(mf_database, x='Fund Name', y='Expense Ratio (%)', color='Category', title="Expense Ratio Comparison")
+        fig_bar.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_bar, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- MODULE 4 ---
+elif "4." in app_mode:
+    st.markdown("<h1>⚔️ Head-to-Head (H2H) Fund & Asset Comparison</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Direct comparative matrix across performance, cost, and efficiency.</p>", unsafe_allow_html=True)
+    
+    c1, c2 = st.columns(2)
+    fund1_name = c1.selectbox("Select Fund A", mf_database['Fund Name'], index=0)
+    fund2_name = c2.selectbox("Select Fund B", mf_database['Fund Name'], index=1)
+    
+    d1 = mf_database[mf_database['Fund Name'] == fund1_name].iloc[0]
+    d2 = mf_database[mf_database['Fund Name'] == fund2_name].iloc[0]
+    
+    st.markdown('<div class="white-card">', unsafe_allow_html=True)
+    colA, colB = st.columns([1, 1.5])
+    with colA:
+        st.markdown("### Comparative Metrics")
+        comp_df = pd.DataFrame({'Metric': mf_database.columns[2:], fund1_name: d1[2:].values, fund2_name: d2[2:].values})
+        st.dataframe(comp_df, hide_index=True, use_container_width=True)
+    with colB:
+        fig_radar = go.Figure()
+        categories = ['1Y Return', 'Alpha', 'Beta (Inv)', 'Risk Efficiency', 'Cost Efficiency']
+        val1 = [d1['1Y Return (%)']*2, d1['Alpha']*10, (2-d1['Beta'])*50, 100-d1['Risk Score'], (2-d1['Expense Ratio (%)'])*50]
+        val2 = [d2['1Y Return (%)']*2, d2['Alpha']*10, (2-d2['Beta'])*50, 100-d2['Risk Score'], (2-d2['Expense Ratio (%)'])*50]
+        fig_radar.add_trace(go.Scatterpolar(r=val1, theta=categories, fill='toself', name=fund1_name, line_color='#0A2540'))
+        fig_radar.add_trace(go.Scatterpolar(r=val2, theta=categories, fill='toself', name=fund2_name, line_color='#00E676'))
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=False)), height=330, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_radar, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- MODULE 5 ---
+elif "5." in app_mode:
+    st.markdown("<h1>🗂️ Portfolio Overlap & Asset Allocation Analysis</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Analyze sector weights, diversification ratios, and cross-asset correlations.</p>", unsafe_allow_html=True)
+    
+    col_alloc, col_donut = st.columns([1.5, 1.2])
+    with col_alloc:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        st.markdown("### Custom Portfolio Weighting")
+        w_equity = st.slider("Large Cap Equities (%)", 0, 100, 50)
+        w_mid = st.slider("Mid & Small Cap (%)", 0, 100, 30)
+        w_debt = st.slider("Fixed Income / Debt (%)", 0, 100, 20)
+        
+        total_w = w_equity + w_mid + w_debt
+        if total_w != 100:
+            st.warning(f"Total allocation is {total_w}%. Recommended total is exactly 100%.")
+        else:
+            st.success("Allocation perfectly balanced.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col_donut:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        alloc_df = pd.DataFrame({'Asset Class': ['Large Cap', 'Mid/Small Cap', 'Debt'], 'Weight': [w_equity, w_mid, w_debt]})
+        fig_donut = px.pie(alloc_df, names='Asset Class', values='Weight', hole=0.5, title="Portfolio Allocation Breakdown", color_discrete_sequence=['#0A2540', '#00E676', '#94A3B8'])
+        fig_donut.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_donut, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- MODULE 6 ---
+elif "6." in app_mode:
+    st.markdown("<h1>📋 Paper Trading & AI Ledger</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution and test risk strategies in real time.</p>", unsafe_allow_html=True)
+    
+    col_trade, col_ledger = st.columns([1, 1.5])
+    with col_trade:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        st.markdown("### Execute Simulation Order")
+        trade_ticker = st.text_input("Asset Ticker", value="TCS.NS")
+        trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
+        shares = st.number_input("Quantity", min_value=1, max_value=1000, value=50)
+        
+        if st.button("Submit Order to Ledger", use_container_width=True):
+            st.success(f"Successfully executed {trade_type} order for {shares} shares of {trade_ticker}!")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col_ledger:
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        st.markdown("### Active Portfolio Ledger")
+        ledger_data = pd.DataFrame({
+            'Timestamp': ['2026-10-02 10:15', '2026-10-03 14:30', '2026-10-04 09:45'],
+            'Ticker': ['RELIANCE.NS', 'AAPL', 'INFY.NS'],
+            'Action': ['BUY', 'BUY', 'SELL'],
+            'Qty': [25, 10, 40],
+            'Status': ['Active', 'Active', 'Closed']
+        })
+        st.dataframe(ledger_data, hide_index=True, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
