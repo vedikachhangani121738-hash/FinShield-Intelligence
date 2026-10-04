@@ -266,60 +266,59 @@ else:
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
             row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-            
-    with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
-    st.markdown("Test real-world scenarios in plain English:")
-    
-    # 1. Plain-English Slider: Market Fear
-    fear_level = st.slider(
-        "Market Fear / Price Swings", 
-        min_value=0.05, max_value=0.80, 
-        value=float(row_data['Volatility_30D'].values[0] if not row_data.empty else 0.20),
-        step=0.05,
-        help="How wild or unstable are the daily price swings?"
-    )
-    
-    # 2. Plain-English Slider: Recent Stock Performance
-    recent_trend = st.slider(
-        "Recent Stock Drop / Gain (Past 5 Days)", 
-        min_value=-0.15, max_value=0.15, 
-        value=float(row_data['Lagged_Return_5D'].values[0] if not row_data.empty else 0.0),
-        step=0.01,
-        format="%.1f%%",
-        help="Has the stock been crashing or rallying recently?"
-    )
-    
-    # 3. Plain-English Slider: Selling Rush
-    selling_rush = st.slider(
-        "Abnormal Selling Volume", 
-        min_value=0.5, max_value=3.0, 
-        value=float(row_data['Volume_Spike_Ratio'].values[0] if not row_data.empty else 1.0),
-        step=0.1,
-        help="Are people suddenly rushing to buy or sell?"
-    )
-
-    # --- Behind the scenes mapping to your model's exact features ---
-    if not row_data.empty:
-        X_test_shock = X_input.copy()
+            with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
+        st.markdown("Test real-world scenarios in plain English:")
         
-        # Map plain-English choices to technical model features
-        if 'Volatility_30D' in X_test_shock.columns:
-            X_test_shock['Volatility_30D'] = fear_level
-        if 'Lagged_Return_5D' in X_test_shock.columns:
-            X_test_shock['Lagged_Return_5D'] = recent_trend
-        if 'Volume_Spike_Ratio' in X_test_shock.columns:
-            X_test_shock['Volume_Spike_Ratio'] = selling_rush
-            
-        # Re-run prediction instantly
-        simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
-        
-        # Display the result cleanly
-        st.markdown("---")
-        st.metric(
-            label="Simulated Crash Risk", 
-            value=f"{simulated_prob*100:.1f}%", 
-            delta=f"{(simulated_prob - prob)*100:+.1f}%"
+        # 1. Plain-English Slider: Market Fear
+        fear_level = st.slider(
+            "Market Fear / Price Swings", 
+            min_value=0.05, max_value=0.80, 
+            value=float(row_data['Volatility_30D'].values[0] if not row_data.empty else 0.20),
+            step=0.05,
+            help="How wild or unstable are the daily price swings?"
         )
+        
+        # 2. Plain-English Slider: Recent Stock Performance
+        recent_trend = st.slider(
+            "Recent Stock Drop / Gain (Past 5 Days)", 
+            min_value=-0.15, max_value=0.15, 
+            value=float(row_data['Lagged_Return_5D'].values[0] if not row_data.empty else 0.0),
+            step=0.01,
+            format="%.1f%%",
+            help="Has the stock been crashing or rallying recently?"
+        )
+        
+        # 3. Plain-English Slider: Selling Rush
+        selling_rush = st.slider(
+            "Abnormal Selling Volume", 
+            min_value=0.5, max_value=3.0, 
+            value=float(row_data['Volume_Spike_Ratio'].values[0] if not row_data.empty else 1.0),
+            step=0.1,
+            help="Are people suddenly rushing to buy or sell?"
+        )
+
+        # --- Behind the scenes mapping to your model's exact features ---
+        if not row_data.empty:
+            X_test_shock = X_input.copy()
+            
+            # Map plain-English choices to technical model features
+            if 'Volatility_30D' in X_test_shock.columns:
+                X_test_shock['Volatility_30D'] = fear_level
+            if 'Lagged_Return_5D' in X_test_shock.columns:
+                X_test_shock['Lagged_Return_5D'] = recent_trend
+            if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                X_test_shock['Volume_Spike_Ratio'] = selling_rush
+                
+            # Re-run prediction instantly
+            simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
+            
+            # Display the result cleanly
+            st.markdown("---")
+            st.metric(
+                label="Simulated Crash Risk", 
+                value=f"{simulated_prob*100:.1f}%", 
+                delta=f"{(simulated_prob - prob)*100:+.1f}%"
+            )
 
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
