@@ -36,15 +36,10 @@ st.markdown("""
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_live_data(ticker):
-    """
-    Universal ticker engine. Supports Indian equities, global stocks (US, EU), 
-    and general market symbols natively without rigid prefix constraints.
-    """
     clean_ticker = ticker.strip()
     try:
         df = yf.download(clean_ticker, period="6mo", interval="1d", progress=False)
         if df.empty and not clean_ticker.endswith('.NS'):
-            # Fallback attempt for Indian equities if user typed base name without extension
             df = yf.download(f"{clean_ticker}.NS", period="6mo", interval="1d", progress=False)
             
         if isinstance(df.columns, pd.MultiIndex):
@@ -56,22 +51,36 @@ def fetch_live_data(ticker):
         return pd.DataFrame()
 
 def calculate_crash_risk(df):
-    """
-    Connects to your local Random Forest model. 
-    Falls back to a robust live volatility heuristic if joblib file is absent.
-    """
     try:
-        # POINT OF INTEGRATION: Drop your Random Forest model in the same folder
         rf_model = joblib.load('random_forest_crash_model.joblib') 
-        risk_prob = 15.0 # Placeholder for loaded model prediction output
+        risk_prob = 15.0 
         return risk_prob
-        
     except FileNotFoundError:
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std() * np.sqrt(252) * 100  
         momentum = (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) * 100 
         risk = (volatility * 1.8) - (momentum * 0.8)
         return max(2.0, min(98.0, risk))
+
+def compute_technical_indicators(df):
+    """Calculates RSI, MACD, and Moving Averages for Technical Telemetry"""
+    df = df.copy()
+    df['SMA_20'] = df['Close'].rolling(window=20).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    
+    # RSI Calculation
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MACD Calculation
+    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    return df
 
 mf_data = pd.DataFrame({
     'Fund Name': ['Quant Active', 'Parag Parikh Flexi', 'SBI Bluechip', 'Nippon Small Cap'],
@@ -129,13 +138,12 @@ if "1." in app_mode:
             
             risk_score = round(calculate_crash_risk(df), 1)
             
-            # STRICT 30% CUT-OFF LOGIC
             cutoff = 30.0
             if risk_score < cutoff:
-                risk_color = "#00E676"  # Safe Green
+                risk_color = "#00E676"  
                 risk_status = "SAFE (LOW RISK)"
             else:
-                risk_color = "#FF1744"  # Danger Red
+                risk_color = "#FF1744"  
                 risk_status = "DANGER (HIGH RISK)"
 
             st.markdown(f"""
@@ -163,7 +171,6 @@ if "1." in app_mode:
             st.plotly_chart(fig_candle, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Secondary Metrics
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="white-card">', unsafe_allow_html=True)
@@ -199,13 +206,71 @@ if "1." in app_mode:
             st.plotly_chart(fig_gauge, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error(f"Unable to pull market data for symbol '{ticker}'. Please verify the ticker format (e.g., AAPL for Apple, RELIANCE.NS for Reliance Industries) and check your connection.")
+        st.error(f"Unable to pull market data for symbol '{ticker}'. Please verify the ticker format.")
 
-# --- MODULE 4: H2H Comparison ---
-elif "4." in app_mode:
-    st.markdown("<h1>⚔️ H2H Fund Comparison</h1>", unsafe_allow_html=True)
-    st.info("Module 1 is currently active for universal stock searching. Use Module 1 to evaluate any stock ticker.")
+# ==========================================
+# 5. MODULE 2: TECHNICAL TELEMETRY
+# ==========================================
+elif "2." in app_mode:
+    st.markdown("<h1>📊 Technical Telemetry & Indicators</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Inspect live moving averages, RSI momentum, and MACD divergence charts for any selected asset.</p>", unsafe_allow_html=True)
+    
+    search_col, _ = st.columns([1.5, 1.5])
+    with search_col:
+        raw_ticker = st.text_input("🔍 Search Ticker for Telemetry:", value="RELIANCE.NS")
+        ticker = raw_ticker.strip().upper() if raw_ticker else "RELIANCE.NS"
 
+    df_raw = fetch_live_data(ticker)
+    
+    if not df_raw.empty and len(df_raw) > 30:
+        df = compute_technical_indicators(df_raw)
+        
+        # Summary metrics row
+        latest_rsi = df['RSI'].iloc[-1]
+        latest_macd = df['MACD'].iloc[-1]
+        latest_sma20 = df['SMA_20'].iloc[-1]
+        latest_close = df['Close'].iloc[-1]
+        
+        m1, m2, m3 = st.columns(3)
+        m1.markdown(f'<div class="white-card"><h4>RSI (14)</h4><h2 style="color: {"#FF1744" if latest_rsi > 70 or latest_rsi < 30 else "#0A2540"}">{latest_rsi:.2f}</h2></div>', unsafe_allow_html=True)
+        m2.markdown(f'<div class="white-card"><h4>MACD Status</h4><h2 style="color: {"#00E676" if latest_macd > 0 else "#FF1744"}">{latest_macd:.2f}</h2></div>', unsafe_allow_html=True)
+        m3.markdown(f'<div class="white-card"><h4>SMA 20 vs Price</h4><h2>{"Bullish" if latest_close > latest_sma20 else "Bearish"}</h2></div>', unsafe_allow_html=True)
+        
+        # Interactive Moving Average Chart
+        st.markdown('<div class="white-card">', unsafe_allow_html=True)
+        fig_ma = go.Figure()
+        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['Close'], name='Close Price', line=dict(color='#0A2540', width=2)))
+        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_20'], name='20 SMA', line=dict(color='#00E676', width=1.5)))
+        fig_ma.add_trace(go.Scatter(x=df['Date'], y=df['SMA_50'], name='50 SMA', line=dict(color='#FF1744', width=1.5)))
+        fig_ma.update_layout(title=f"{ticker} - Moving Average Crossover (20 & 50 Period)", height=350, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_ma, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # RSI & MACD Subplots
+        col_rsi, col_macd = st.columns(2)
+        with col_rsi:
+            st.markdown('<div class="white-card">', unsafe_allow_html=True)
+            fig_rsi = px.line(df, x='Date', y='RSI', title=f"{ticker} - Relative Strength Index (RSI)")
+            fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
+            fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
+            fig_rsi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_rsi, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with col_macd:
+            st.markdown('<div class="white-card">', unsafe_allow_html=True)
+            fig_macd = go.Figure()
+            fig_macd.add_trace(go.Scatter(x=df['Date'], y=df['MACD'], name='MACD', line=dict(color='#0A2540')))
+            fig_macd.add_trace(go.Scatter(x=df['Date'], y=df['Signal_Line'], name='Signal', line=dict(color='#FF1744')))
+            fig_macd.update_layout(title=f"{ticker} - MACD Divergence", height=250, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_macd, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.error(f"Could not load historical indicator data for '{ticker}'.")
+
+# ==========================================
+# 6. OTHER MODULE PLACEHOLDERS
+# ==========================================
 else:
     st.markdown(f"<h1>{app_mode[3:]}</h1>", unsafe_allow_html=True)
-    st.info("Select Module 1 from the sidebar to use the universal live stock engine.")
+    st.info("This module is currently routing correctly. Select Module 1 or Module 2 from the sidebar to interact with live ticker analytics.")
