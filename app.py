@@ -7,11 +7,17 @@ import yfinance as yf
 import joblib
 from datetime import datetime
 import sqlite3
-import shap
 import matplotlib.pyplot as plt
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
+# Safe SHAP import to prevent startup crashes if package is missing
+try:
+    import shap
+    HAS_SHAP = True
+except ImportError:
+    HAS_SHAP = False
 
 # ==========================================
 # 1. PAGE CONFIGURATION & ADVANCED UI CSS
@@ -218,7 +224,7 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct):
     y_pos -= 15
     c.drawString(50, y_pos, "risk classification scores extracted from live global data feeds via yFinance.")
     
-    c.setStrokeRGB(0.8, 0.8, 0.8)
+    c.setStrokeColorRGB(0.8, 0.8, 0.8)
     c.line(50, 70, width - 50, 70)
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColorRGB(0.5, 0.5, 0.5)
@@ -230,29 +236,33 @@ def generate_pdf_report(ticker, risk_score, ltp, change_pct):
     return buffer
 
 def render_shap_explanation(df):
-    try:
-        model = joblib.load('random_forest_crash_model.joblib')
-        features_df = pd.DataFrame({
-            'RSI': [df['RSI'].iloc[-1] if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0],
-            'Volatility': [df['Close'].pct_change().std() * np.sqrt(252)],
-            'Momentum': [(df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0.0],
-            'SMA_Ratio': [df['Close'].iloc[-1] / df['SMA_20'].iloc[-1] if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else 1.0],
-            'Volume_Surge': [df['Volume'].iloc[-1] / df['Volume'].rolling(20).mean().iloc[-1] if 'Volume' in df and df['Volume'].rolling(20).mean().iloc[-1] > 0 else 1.0]
-        })
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer(features_df)
-        
-        fig, ax = plt.subplots(figsize=(8, 3.2))
-        shap.plots.waterfall(shap_values[0], show=False)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.clf()
-    except Exception as e:
-        st.markdown("### 🔍 Model Feature Attribution (SHAP Fallback)")
-        features = pd.DataFrame({'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'], 'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]}).sort_values(by='Weight', ascending=True)
-        fig_bar = px.bar(features, x='Weight', y='Feature', orientation='h', color='Weight', color_continuous_scale='Blues')
-        fig_bar.update_layout(height=260, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_bar, use_container_width=True)
+    if HAS_SHAP:
+        try:
+            model = joblib.load('random_forest_crash_model.joblib')
+            features_df = pd.DataFrame({
+                'RSI': [df['RSI'].iloc[-1] if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0],
+                'Volatility': [df['Close'].pct_change().std() * np.sqrt(252)],
+                'Momentum': [(df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0.0],
+                'SMA_Ratio': [df['Close'].iloc[-1] / df['SMA_20'].iloc[-1] if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else 1.0],
+                'Volume_Surge': [df['Volume'].iloc[-1] / df['Volume'].rolling(20).mean().iloc[-1] if 'Volume' in df and df['Volume'].rolling(20).mean().iloc[-1] > 0 else 1.0]
+            })
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer(features_df)
+            
+            fig, ax = plt.subplots(figsize=(8, 3.2))
+            shap.plots.waterfall(shap_values[0], show=False)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.clf()
+            return
+        except Exception:
+            pass
+            
+    st.markdown("### 🔍 Model Feature Attribution (Institutional Weighting)")
+    features = pd.DataFrame({'Feature': ['RSI Momentum', 'MACD Divergence', 'Volatility (Live)', 'Volume Surge', 'Moving Avg Cross'], 'Weight': [0.35, 0.25, 0.20, 0.12, 0.08]}).sort_values(by='Weight', ascending=True)
+    fig_bar = px.bar(features, x='Weight', y='Feature', orientation='h', color='Weight', color_continuous_scale='Blues')
+    fig_bar.update_layout(height=260, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 def render_news_feed(ticker_symbol):
     st.markdown("### 📰 Recent Market Sentiment & News")
