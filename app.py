@@ -17,13 +17,34 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling for Professional Executive Layout
+# High-Visibility Professional Styling (Fixes contrast and text visibility)
 st.markdown("""
 <style>
-    .main {background-color: #0b0f19;}
-    .stMetric {background: #131b2e; padding: 15px; border-radius: 10px; border: 1px solid #1e293b;}
-    .card {background: #131b2e; padding: 20px; border-radius: 12px; border: 1px solid #1e293b; margin-bottom: 20px;}
-    h1, h2, h3 {color: #f8fafc !important;}
+    /* Force consistent dark theme background and text visibility */
+    .stApp {
+        background-color: #0b0f19;
+        color: #f8fafc;
+    }
+    /* Sidebar container */
+    [data-testid="stSidebar"] {
+        background-color: #111827;
+        color: #f8fafc;
+    }
+    /* Metric & Card styling */
+    .stMetric, [data-testid="stMetric"], .card {
+        background-color: #131b2e !important;
+        color: #f8fafc !important;
+        padding: 16px;
+        border-radius: 10px;
+        border: 1px solid #1e293b;
+    }
+    /* Typography contrast */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+    }
+    p, span, label, .stMarkdown, div[data-testid="stMarkdownContainer"] {
+        color: #e2e8f0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,13 +88,11 @@ def compute_stock_crash_model(df):
     df['MA_200'] = df['Close'].rolling(200).mean()
     df = df.dropna()
     
-    # Feature engineering for Random Forest Crash Indicator
     X = df[['Vol_21', 'Drawdown', 'Return']].copy()
     X['Vol_21'] = X['Vol_21'].fillna(0)
     X['Drawdown'] = X['Drawdown'].fillna(0)
     X['Return'] = X['Return'].fillna(0)
     
-    # Target proxy: Crash defined as daily drop < -2.5% or high volatility surge
     y = ((X['Return'] < -0.025) | (X['Vol_21'] > 40)).astype(int)
     
     if len(y.unique()) > 1:
@@ -81,7 +100,7 @@ def compute_stock_crash_model(df):
         model.fit(X, y)
         crash_prob = model.predict_proba(X)[:, 1][-1]
     else:
-        crash_prob = 0.15  # Default baseline risk if data is uniform
+        crash_prob = 0.15
         
     return df, float(crash_prob)
 
@@ -105,7 +124,6 @@ def analyze_mf(code, rf_rate=0.06):
     cum_max = navs.cummax()
     dd = ((navs - cum_max) / cum_max).min() * 100
     
-    # Composite health score & risk probability proxy
     score = max(0, min(100, (sharpe * 20) + (100 - vol)))
     prob = max(0.05, min(0.95, vol / 50.0 - sharpe * 0.1))
     
@@ -138,14 +156,15 @@ def gauge_chart(prob):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=prob * 100,
-        title={'text': "Model Crash Risk Indicator (%)"},
-        gauge={'axis': {'range': [0, 100]},
-               'bar': {'color': "darkblue"},
+        title={'text': "Model Crash Risk Indicator (%)", 'font': {'color': 'white'}},
+        number={'font': {'color': 'white'}},
+        gauge={'axis': {'range': [0, 100], 'tickfont': {'color': 'white'}},
+               'bar': {'color': "#3b82f6"},
                'steps': [
                    {'range': [0, 30], 'color': "rgba(40, 167, 69, 0.3)"},
                    {'range': [30, 60], 'color': "rgba(255, 193, 7, 0.3)"},
                    {'range': [60, 100], 'color': "rgba(220, 53, 69, 0.3)"}]}))
-    fig.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+    fig.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={'color': 'white'})
     return fig
 
 # ==============================================================================
@@ -218,7 +237,6 @@ elif page == "📉 Stock Crash Predictor & Analytics":
                     
                     st.success(f"Analysis Complete for **{stock_ticker}** | Current Price: ₹{latest_close:,.2f}")
                     
-                    # Status Display
                     if prob < 0.3:
                         st.success(f"{status_label(prob)} — Model Crash Indicator: {prob*100:.1f}%")
                     elif prob < 0.6:
@@ -226,20 +244,20 @@ elif page == "📉 Stock Crash Predictor & Analytics":
                     else:
                         st.error(f"{status_label(prob)} — Model Crash Indicator: {prob*100:.1f}%")
                         
-                    # Metrics row
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Annualized Volatility", f"{df_res['Vol_21'].iloc[-1]:.2f}%")
                     m2.metric("Max Drawdown", f"{df_res['Drawdown'].min():.2f}%")
                     m3.metric("50-Day MA", f"₹{df_res['MA_50'].iloc[-1]:,.2f}")
                     m4.metric("200-Day MA", f"₹{df_res['MA_200'].iloc[-1]:,.2f}")
                     
-                    # Tabs for visuals and gauge
                     t1, t2, t3 = st.tabs(["📈 Price & Moving Averages", "📉 Drawdown & Volatility", "🤖 ML Risk Gauge"])
                     with t1:
                         fig = px.line(df_res, x=df_res.index, y=['Close', 'MA_50', 'MA_200'], title=f"{stock_ticker} Price & Trend")
+                        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={'color': 'white'})
                         st.plotly_chart(fig, use_container_width=True)
                     with t2:
                         fig_dd = px.area(df_res, x=df_res.index, y='Drawdown', title=f"{stock_ticker} Historical Drawdown (%)")
+                        fig_dd.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={'color': 'white'})
                         st.plotly_chart(fig_dd, use_container_width=True)
                     with t3:
                         c_gauge, c_info = st.columns([1, 1.5])
@@ -259,7 +277,6 @@ elif page == "🔍 Fund Intelligence (AMFI)":
     st.subheader("🔍 Mutual Fund Scheme Intelligence")
     st.markdown("Live AMFI scheme analytics with risk metrics, performance attribution, and instant factsheet generation.")
     
-    # Preset sample AMFI schemes
     mf_options = {
         "SBI Blue Fund (120503)": "120503",
         "Axis Bluechip Fund (118834)": "118834",
@@ -289,11 +306,16 @@ elif page == "🔍 Fund Intelligence (AMFI)":
                 d.metric("Sharpe Ratio", f"{r['sharpe']:.2f}")
                 e.metric("Max Drawdown", f"{r['dd']:.1f}%")
                 
-                t1, t2, t3, t4 = st.tabs(["📈 Performance", "🛡️ Risk Metrics", "🤖 AI Health Score", "📄 Factsheet"])
+                t1, t2, t3, t4 = st.tabs(["📈 Performance", "🛡️️ Risk Metrics", "🤖 AI Health Score", "📄 Factsheet"])
                 with t1:
-                    st.plotly_chart(px.line(r["navdf"], x=r["navdf"].index, y="nav", title="Historical NAV"), use_container_width=True)
+                    fig_nav = px.line(r["navdf"], x=r["navdf"].index, y="nav", title="Historical NAV")
+                    fig_nav.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={'color': 'white'})
+                    st.plotly_chart(fig_nav, use_container_width=True)
+                    
                     dd_series = (r["navdf"].nav / r["navdf"].nav.cummax() - 1) * 100
-                    st.plotly_chart(px.area(x=dd_series.index, y=dd_series.values, title="Full-History Drawdown (%)"), use_container_width=True)
+                    fig_mf_dd = px.area(x=dd_series.index, y=dd_series.values, title="Full-History Drawdown (%)")
+                    fig_mf_dd.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={'color': 'white'})
+                    st.plotly_chart(fig_mf_dd, use_container_width=True)
                 with t2:
                     x_col, y_col, z_col = st.columns(3)
                     x_col.metric("Annualized Volatility", f"{r['vol']:.2f}%")
@@ -343,7 +365,7 @@ elif page == "💼 Paper Trading Ledger":
         if submitted:
             try:
                 b_price = float(buy_price)
-                current_p = b_price  # Initial default
+                current_p = b_price
                 if asset_type.startswith("Equity"):
                     df_live = fetch_stock_data(asset_name, period="5d")
                     if not df_live.empty:
