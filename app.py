@@ -15,7 +15,6 @@ st.set_page_config(
 )
 
 # Custom Institutional CSS (Dark Terminal Theme styled after Bloomberg / TradingView)
-
 st.markdown("""
     <style>
     @keyframes pulse-red {
@@ -28,6 +27,7 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
@@ -226,8 +226,6 @@ else:
     if selected_ticker:
         @st.cache_data(ttl=3600)
         def fetch_live_data(symbol):
-            # Using period="max" provides sufficient historical runway for 200-day moving averages
-            # without running into rolling truncation bottlenecks.
             df = yf.download(symbol, period="max", interval="1d", progress=False)
             if df.empty:
                 return pd.DataFrame()
@@ -246,7 +244,7 @@ else:
             df['SMA_50'] = df['Close'].rolling(50).mean()
             df['SMA_200'] = df['Close'].rolling(200).mean()
             df['VWAP_20D'] = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum().replace(0, 1))
-            df['Beta_60D'] = 1.0  
+            df['Beta_60D'] = 1.0 
             df['Vol_x_Beta'] = df['Volatility_30D'] * df['Beta_60D']
             df['Lagged_Return_5D'] = df['Close'].pct_change(5)
             df['Lagged_Return_10D'] = df['Close'].pct_change(10) if 'Lagged_Return_10D' in feature_cols else 0
@@ -254,7 +252,7 @@ else:
             df['Lagged_Volume_5D'] = df['Volume'].shift(5)
             df['Volume_Spike_Ratio'] = df['Volume'] / (df['Volume'].rolling(20).mean().replace(0, 1))
             df['SMA_50_200_Ratio'] = df['SMA_50'] / (df['SMA_200'].replace(0, 1))
-            df['Market_Volatility_Index'] = 15.0  
+            df['Market_Volatility_Index'] = 15.0 
             
             df['Date'] = df.index
             df['Month'] = df['Date'].dt.month
@@ -265,56 +263,8 @@ else:
             date_col = 'Date'
             available_dates = ticker_data[date_col].dt.strftime('%Y-%m-%d').tolist()
             selected_date = st.sidebar.selectbox("Live Market Session Date", available_dates[::-1])
-            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d') == selected_date]
-        
-# -----------------------------------------------------------------------------
-# 3.5. INTERACTIVE 'WHAT-IF' MARKET SIMULATOR (SIDEBAR)
-# -----------------------------------------------------------------------------
-with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
-    st.markdown("Test real-world scenarios in plain English:")
-    
-    fear_level = st.slider(
-        "Market Fear / Price Swings", 
-        min_value=0.05, max_value=0.80, 
-        value=float(row_data['Volatility_30D'].values[0] if not row_data.empty else 0.20),
-        step=0.05,
-        help="How wild or unstable are the daily price swings?"
-    )
-    
-    recent_trend = st.slider(
-        "Recent Stock Drop / Gain (Past 5 Days)", 
-        min_value=-0.15, max_value=0.15, 
-        value=float(row_data['Lagged_Return_5D'].values[0] if not row_data.empty else 0.0),
-        step=0.01,
-        format="%.1f%%",
-        help="Has the stock been crashing or rallying recently?"
-    )
-    
-    selling_rush = st.slider(
-        "Abnormal Selling Volume", 
-        min_value=0.5, max_value=3.0, 
-        value=float(row_data['Volume_Spike_Ratio'].values[0] if not row_data.empty else 1.0),
-        step=0.1,
-        help="Are people suddenly rushing to buy or sell?"
-    )
+            row_data = ticker_data[ticker_data[date_col].dt.strftime('%Y-%m-%d'] == selected_date]
 
-    if not row_data.empty:
-        X_test_shock = X_input.copy()
-        if 'Volatility_30D' in X_test_shock.columns:
-            X_test_shock['Volatility_30D'] = fear_level
-        if 'Lagged_Return_5D' in X_test_shock.columns:
-            X_test_shock['Lagged_Return_5D'] = recent_trend
-        if 'Volume_Spike_Ratio' in X_test_shock.columns:
-            X_test_shock['Volume_Spike_Ratio'] = selling_rush
-            
-        simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
-        
-        st.markdown("---")
-        st.metric(
-            label="Simulated Crash Risk", 
-            value=f"{simulated_prob*100:.1f}%", 
-            delta=f"{(simulated_prob - prob)*100:+.1f}%"
-        )
 # -----------------------------------------------------------------------------
 # 4. MAIN TERMINAL DASHBOARD
 # -----------------------------------------------------------------------------
@@ -327,6 +277,55 @@ else:
     # Calculate Crash Risk Probability
     prob = float(model.predict_proba(X_input.values)[:, 1][0])
     is_anomaly = prob >= 0.30
+
+    # -------------------------------------------------------------------------
+    # 3.5. INTERACTIVE 'WHAT-IF' MARKET SIMULATOR (SIDEBAR)
+    # -------------------------------------------------------------------------
+    with st.sidebar.expander("🧪 Interactive 'What-If' Market Simulator"):
+        st.markdown("Test real-world scenarios in plain English:")
+        
+        fear_level = st.slider(
+            "Market Fear / Price Swings", 
+            min_value=0.05, max_value=0.80, 
+            value=float(row_data['Volatility_30D'].values[0] if not row_data.empty else 0.20),
+            step=0.05,
+            help="How wild or unstable are the daily price swings?"
+        )
+        
+        recent_trend = st.slider(
+            "Recent Stock Drop / Gain (Past 5 Days)", 
+            min_value=-0.15, max_value=0.15, 
+            value=float(row_data['Lagged_Return_5D'].values[0] if not row_data.empty else 0.0),
+            step=0.01,
+            format="%.1f%%",
+            help="Has the stock been crashing or rallying recently?"
+        )
+        
+        selling_rush = st.slider(
+            "Abnormal Selling Volume", 
+            min_value=0.5, max_value=3.0, 
+            value=float(row_data['Volume_Spike_Ratio'].values[0] if not row_data.empty else 1.0),
+            step=0.1,
+            help="Are people suddenly rushing to buy or sell?"
+        )
+
+        if not row_data.empty:
+            X_test_shock = X_input.copy()
+            if 'Volatility_30D' in X_test_shock.columns:
+                X_test_shock['Volatility_30D'] = fear_level
+            if 'Lagged_Return_5D' in X_test_shock.columns:
+                X_test_shock['Lagged_Return_5D'] = recent_trend
+            if 'Volume_Spike_Ratio' in X_test_shock.columns:
+                X_test_shock['Volume_Spike_Ratio'] = selling_rush
+                
+            simulated_prob = float(model.predict_proba(X_test_shock.values)[:, 1][0])
+            
+            st.markdown("---")
+            st.metric(
+                label="Simulated Crash Risk", 
+                value=f"{simulated_prob*100:.1f}%", 
+                delta=f"{(simulated_prob - prob)*100:+.1f}%"
+            )
     
     tab1, tab2, tab3 = st.tabs([
         "🛡️ Executive Risk Scorecard", 
