@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import yfinance as yf
 import joblib
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ==========================================
 # 1. PAGE CONFIGURATION & DUAL-TONE CSS
@@ -23,7 +23,7 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #0A2540 !important; }
     [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
     h1, h2, h3 { color: #0A2540; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 700; }
-    .stTextInput > div > div > input, .stSelectbox > div > div > div { border-radius: 8px; border: 2px solid #0A2540; font-weight: bold; }
+    .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input { border-radius: 8px; border: 2px solid #0A2540; font-weight: bold; }
     .white-card { background-color: #FFFFFF; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E5E7EB; margin-bottom: 1rem; }
     .blue-card { background-color: #0A2540; color: #FFFFFF; padding: 1.5rem; border-radius: 12px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 1rem; border-left: 6px solid; }
     .blue-card h3, .blue-card p { color: #FFFFFF !important; margin: 0; }
@@ -32,7 +32,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. GLOBAL LIVE YFINANCE & PIPELINES
+# 2. SESSION STATE INITIALIZATION
+# ==========================================
+if 'cash_balance' not in st.session_state:
+    st.session_state.cash_balance = 1000000.0  # ₹10,00,000 Initial Capital
+if 'trade_ledger' not in st.session_state:
+    st.session_state.trade_ledger = []
+
+# ==========================================
+# 3. GLOBAL LIVE YFINANCE & PIPELINES
 # ==========================================
 @st.cache_data(ttl=900)
 def fetch_live_data(ticker):
@@ -87,11 +95,11 @@ mf_database = pd.DataFrame({
 })
 
 # ==========================================
-# 3. SIDEBAR NAVIGATION
+# 4. SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
     st.markdown("<h2>🛡️ FinShield Intelligence</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v3.5</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94A3B8; font-size:0.9rem;'>Global Institutional Terminal v3.8</p>", unsafe_allow_html=True)
     st.markdown("---")
     
     app_mode = st.radio(
@@ -109,7 +117,7 @@ with st.sidebar:
     st.caption("🟢 Universal yFinance Feed: **ACTIVE**")
 
 # ==========================================
-# 4. MODULE EXECUTIONS
+# 5. MODULE EXECUTIONS
 # ==========================================
 
 # --- MODULE 1 ---
@@ -311,32 +319,77 @@ elif "5." in app_mode:
         st.plotly_chart(fig_donut, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- MODULE 6 ---
+# --- MODULE 6: PAPER TRADING & AI LEDGER ---
 elif "6." in app_mode:
     st.markdown("<h1>📋 Paper Trading & AI Ledger</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution and test risk strategies in real time.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#475569; margin-bottom:1rem;'>Simulate institutional trade execution with real-time capital tracking.</p>", unsafe_allow_html=True)
+    
+    # Available Cash Display Metric
+    st.markdown(f"""
+    <div class="blue-card" style="border-left-color: #00E676;">
+        <p style="font-size: 1rem; color: #94A3B8 !important;">AVAILABLE LIQUID CAPITAL</p>
+        <h2 style="font-size: 2.5rem; color: #00E676 !important;">₹{st.session_state.cash_balance:,.2f}</h2>
+    </div>
+    """, unsafe_allow_html=True)
     
     col_trade, col_ledger = st.columns([1, 1.5])
+    
     with col_trade:
         st.markdown('<div class="white-card">', unsafe_allow_html=True)
         st.markdown("### Execute Simulation Order")
-        trade_ticker = st.text_input("Asset Ticker", value="TCS.NS")
+        trade_ticker = st.text_input("Asset Ticker", value="RELIANCE.NS").strip().upper()
         trade_type = st.selectbox("Order Action", ["BUY / LONG", "SELL / SHORT"])
-        shares = st.number_input("Quantity", min_value=1, max_value=1000, value=50)
+        shares = st.number_input("Quantity", min_value=1, max_value=10000, value=10)
         
         if st.button("Submit Order to Ledger", use_container_width=True):
-            st.success(f"Successfully executed {trade_type} order for {shares} shares of {trade_ticker}!")
+            # Fetch live market price to execute order realistically
+            live_df = fetch_live_data(trade_ticker)
+            if not live_df.empty:
+                exec_price = float(live_df['Close'].iloc[-1])
+                total_cost = exec_price * shares
+                
+                if "BUY" in trade_type:
+                    if st.session_state.cash_balance >= total_cost:
+                        st.session_state.cash_balance -= total_cost
+                        st.session_state.trade_ledger.insert(0, {
+                            'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            'Ticker': trade_ticker,
+                            'Action': 'BUY',
+                            'Qty': shares,
+                            'Exec Price (₹)': round(exec_price, 2),
+                            'Total (₹)': round(total_cost, 2)
+                        })
+                        st.success(f"Executed BUY for {shares}x {trade_ticker} at ₹{exec_price:,.2f}!")
+                        st.rerun()
+                    else:
+                        st.error("Insufficient available liquid cash balance for this order!")
+                else:
+                    # SELL logic
+                    st.session_state.cash_balance += total_cost
+                    st.session_state.trade_ledger.insert(0, {
+                        'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        'Ticker': trade_ticker,
+                        'Action': 'SELL',
+                        'Qty': shares,
+                        'Exec Price (₹)': round(exec_price, 2),
+                        'Total (₹)': round(total_cost, 2)
+                    })
+                    st.success(f"Executed SELL for {shares}x {trade_ticker} at ₹{exec_price:,.2f}!")
+                    st.rerun()
+            else:
+                st.error(f"Could not fetch live price for '{trade_ticker}' to execute order.")
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col_ledger:
         st.markdown('<div class="white-card">', unsafe_allow_html=True)
-        st.markdown("### Active Portfolio Ledger")
-        ledger_data = pd.DataFrame({
-            'Timestamp': ['2026-10-02 10:15', '2026-10-03 14:30', '2026-10-04 09:45'],
-            'Ticker': ['RELIANCE.NS', 'AAPL', 'INFY.NS'],
-            'Action': ['BUY', 'BUY', 'SELL'],
-            'Qty': [25, 10, 40],
-            'Status': ['Active', 'Active', 'Closed']
-        })
-        st.dataframe(ledger_data, hide_index=True, use_container_width=True)
+        st.markdown("### Active Execution Ledger")
+        if len(st.session_state.trade_ledger) > 0:
+            ledger_df = pd.DataFrame(st.session_state.trade_ledger)
+            st.dataframe(ledger_df, hide_index=True, use_container_width=True)
+            if st.button("Clear Ledger History"):
+                st.session_state.trade_ledger = []
+                st.session_state.cash_balance = 1000000.0
+                st.rerun()
+        else:
+            st.info("No active trades executed yet in this session. Submit an order from the left panel to populate the live ledger.")
         st.markdown('</div>', unsafe_allow_html=True)
