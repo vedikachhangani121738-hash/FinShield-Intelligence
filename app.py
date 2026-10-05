@@ -425,9 +425,9 @@ if "1." in app_mode:
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((ltp - prev_close) / prev_close) * 100
             # Inline risk score calculation
-features = ['RSI', 'Volatility', 'SMA_20', 'SMA_50']  # Ensure these match your model's features
-latest_X = df[features].iloc[[-1]]
-risk_score = round(float(model.predict_proba(latest_X)[0][1] * 100), 1)
+            features = ['RSI', 'Volatility', 'SMA_20', 'SMA_50']  # Ensure these match your model's features
+            latest_X = df[features].iloc[[-1]]
+            risk_score = round(float(model.predict_proba(latest_X)[0][1] * 100), 1)
             
             cutoff = 30.0
             risk_color = "#00E676" if risk_score < cutoff else "#FF1744"
