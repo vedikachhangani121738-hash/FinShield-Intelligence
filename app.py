@@ -207,16 +207,27 @@ def fetch_live_data(ticker):
         df.dropna(subset=['Close'], inplace=True)
         df.reset_index(inplace=True)
         return df
-    except Exception as e:
+    except Exception:
         return pd.DataFrame()
-        rf_model = joblib.load('random_forest_crash_model.joblib') 
-        return 15.0 
+
+def calculate_crash_risk(df):
+    try:
+        model = joblib.load('random_forest_crash_model.joblib')
+        features_df = pd.DataFrame({
+            'RSI': [df['RSI'].iloc[-1] if 'RSI' in df and not pd.isna(df['RSI'].iloc[-1]) else 50.0],
+            'Volatility': [df['Close'].pct_change().std() * np.sqrt(252)],
+            'Momentum': [(df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0.0],
+            'SMA_Ratio': [df['Close'].iloc[-1] / df['SMA_20'].iloc[-1] if 'SMA_20' in df and not pd.isna(df['SMA_20'].iloc[-1]) else 1.0],
+            'Volume_Surge': [df['Volume'].iloc[-1] / df['Volume'].rolling(20).mean().iloc[-1] if 'Volume' in df and df['Volume'].rolling(20).mean().iloc[-1] > 0 else 1.0]
+        })
+        prob = model.predict_proba(features_df)[0][1] * 100
+        return float(prob)
     except Exception:
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std() * np.sqrt(252) * 100  
         momentum = (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) * 100 if len(df) >= 20 else 0.0
         risk = (volatility * 1.8) - (momentum * 0.8)
-        return max(2.0, min(98.0, risk))
+        return float(max(2.0, min(98.0, risk)))
 
 def compute_technical_indicators(df):
     df = df.copy()
@@ -424,10 +435,8 @@ if "1." in app_mode:
             ltp = float(df['Close'].iloc[-1])
             prev_close = float(df['Close'].iloc[-2])
             change_pct = ((ltp - prev_close) / prev_close) * 100
-            # Inline risk score calculation
-            features = ['RSI', 'Volatility', 'SMA_20', 'SMA_50']  # Ensure these match your model's features
-            latest_X = df[features].iloc[[-1]]
-            risk_score = round(float(model.predict_proba(latest_X)[0][1] * 100), 1)
+            
+            risk_score = round(calculate_crash_risk(df), 1)
             
             cutoff = 30.0
             risk_color = "#00E676" if risk_score < cutoff else "#FF1744"
