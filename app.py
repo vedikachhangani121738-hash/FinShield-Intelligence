@@ -426,12 +426,12 @@ if "1." in app_mode:
             change_pct = ((ltp - prev_close) / prev_close) * 100
             def calculate_crash_risk(df_data):
     # Prepare the latest row's features for the Random Forest model
-        features = ['RSI', 'Volatility', 'SMA_20', 'SMA_50'] # Use your actual feature names
-        latest_X = df_data[features].iloc[[-1]]
+            features = ['RSI', 'Volatility', 'SMA_20', 'SMA_50'] # Use your actual feature names
+            latest_X = df_data[features].iloc[[-1]]
     
     # Predict crash probability (class 1)
-        probability = model.predict_proba(latest_X)[0][1] * 100
-        return probability
+            probability = model.predict_proba(latest_X)[0][1] * 100
+            return probability
             risk_score = round(calculate_crash_risk(df), 1)
             
             cutoff = 30.0
