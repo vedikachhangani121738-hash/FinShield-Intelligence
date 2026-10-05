@@ -203,13 +203,12 @@ def fetch_live_data(ticker):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
             
+        # Clean trailing NaN rows from yfinance incomplete feed
+        df.dropna(subset=['Close'], inplace=True)
         df.reset_index(inplace=True)
         return df
     except Exception as e:
         return pd.DataFrame()
-
-def calculate_crash_risk(df):
-    try:
         rf_model = joblib.load('random_forest_crash_model.joblib') 
         return 15.0 
     except Exception:
